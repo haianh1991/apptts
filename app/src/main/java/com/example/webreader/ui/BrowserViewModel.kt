@@ -8,6 +8,7 @@ import com.example.webreader.data.SettingsRepository
 import com.example.webreader.data.TtsManager
 import com.example.webreader.data.QueueItem
 import com.example.webreader.data.QueueRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -82,7 +83,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun playNextParagraph(completedIndex: Int) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.Default) {
             val nextIndex = if (completedIndex == -2) 0 else completedIndex + 1
             if (nextIndex in _paragraphs.value.indices) {
                 _currentParagraphIndex.value = nextIndex

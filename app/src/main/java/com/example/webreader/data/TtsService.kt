@@ -9,11 +9,14 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.example.webreader.MainActivity
 import com.example.webreader.ui.BrowserViewModel
 
 class TtsService : Service() {
+
+    private var wakeLock: PowerManager.WakeLock? = null
 
     companion object {
         private const val CHANNEL_ID = "tts_service_channel"
@@ -63,14 +66,17 @@ class TtsService : Service() {
                 } else {
                     startForeground(NOTIFICATION_ID, notification)
                 }
+                acquireWakeLock()
             }
             ACTION_PAUSE -> {
                 BrowserViewModel.activeInstance?.pauseReading()
+                releaseWakeLock()
                 stopForeground(true)
                 stopSelf()
             }
             ACTION_STOP -> {
                 BrowserViewModel.activeInstance?.pauseReading()
+                releaseWakeLock()
                 stopForeground(true)
                 stopSelf()
             }
@@ -79,6 +85,33 @@ class TtsService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun acquireWakeLock() {
+        if (wakeLock == null) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "WebReader::TtsWakeLock"
+            ).apply {
+                setReferenceCounted(false)
+            }
+        }
+        if (wakeLock?.isHeld == false) {
+            // Acquire wake lock with a 2-hour timeout as a safety limit
+            wakeLock?.acquire(2 * 60 * 60 * 1000L)
+        }
+    }
+
+    private fun releaseWakeLock() {
+        if (wakeLock?.isHeld == true) {
+            wakeLock?.release()
+        }
+    }
+
+    override fun onDestroy() {
+        releaseWakeLock()
+        super.onDestroy()
+    }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
