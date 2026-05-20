@@ -61,15 +61,23 @@ fun SettingsScreen(
     var selectedModel by remember { mutableStateOf(settings.geminiModel) }
     var ttsSpeed by remember { mutableFloatStateOf(settings.ttsSpeed) }
     var ttsPitch by remember { mutableFloatStateOf(settings.ttsPitch) }
+    var selectedEngine by remember { mutableStateOf(settings.ttsEngine) }
 
     var apiKeyVisible by remember { mutableStateOf(false) }
     var isDropdownExpanded by remember { mutableStateOf(false) }
+    var isEngineDropdownExpanded by remember { mutableStateOf(false) }
+
+    val availableEngines = remember { viewModel.ttsManager.getAvailableTtsEngines() }
+    val activeEngineLabel = availableEngines.find { it.name == selectedEngine }?.label ?: selectedEngine.ifBlank { "Mặc định hệ thống" }
 
     val models = listOf(
-        "gemini-1.5-flash",
-        "gemini-1.5-pro",
+        "gemini-3.5-flash",
+        "gemini-3-flash",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
         "gemini-2.0-flash",
-        "gemini-2.5-flash"
+        "gemini-1.5-flash",
+        "gemini-1.5-pro"
     )
 
     Scaffold(
@@ -195,6 +203,44 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
 
+                    // Dropdown chọn Công cụ TTS
+                    ExposedDropdownMenuBox(
+                        expanded = isEngineDropdownExpanded,
+                        onExpandedChange = { isEngineDropdownExpanded = !isEngineDropdownExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = activeEngineLabel,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Công cụ giọng đọc (TTS Engine)") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isEngineDropdownExpanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = isEngineDropdownExpanded,
+                            onDismissRequest = { isEngineDropdownExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Mặc định hệ thống") },
+                                onClick = {
+                                    selectedEngine = ""
+                                    isEngineDropdownExpanded = false
+                                }
+                            )
+                            availableEngines.forEach { engine ->
+                                DropdownMenuItem(
+                                    text = { Text(engine.label) },
+                                    onClick = {
+                                        selectedEngine = engine.name
+                                        isEngineDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
                     // Điều chỉnh tốc độ
                     Column {
                         Row(
@@ -267,7 +313,7 @@ fun SettingsScreen(
                 onClick = {
                     settings.geminiApiKey = apiKey.trim()
                     settings.geminiModel = selectedModel
-                    viewModel.updateTtsSettings(ttsSpeed, ttsPitch)
+                    viewModel.updateTtsSettings(ttsSpeed, ttsPitch, selectedEngine)
                     onBackClick()
                 },
                 modifier = Modifier

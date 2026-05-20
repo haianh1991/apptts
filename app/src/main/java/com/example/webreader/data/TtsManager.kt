@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 class TtsManager(private val context: Context) {
 
+    private val settings = SettingsRepository(context)
     private var tts: TextToSpeech? = null
     
     private val _isInitialized = MutableStateFlow(false)
@@ -27,7 +28,8 @@ class TtsManager(private val context: Context) {
     }
 
     private fun initializeTts() {
-        tts = TextToSpeech(context) { status ->
+        val selectedEngine = settings.ttsEngine
+        val initListener = TextToSpeech.OnInitListener { status ->
             if (status == TextToSpeech.SUCCESS) {
                 val localeVi = Locale("vi", "VN")
                 val result = tts?.setLanguage(localeVi)
@@ -47,6 +49,28 @@ class TtsManager(private val context: Context) {
                 _isInitialized.value = false
             }
         }
+
+        tts = if (selectedEngine.isBlank()) {
+            TextToSpeech(context, initListener)
+        } else {
+            TextToSpeech(context, initListener, selectedEngine)
+        }
+    }
+
+    fun reinitialize() {
+        shutdown()
+        initializeTts()
+    }
+
+    fun getAvailableTtsEngines(): List<TextToSpeech.EngineInfo> {
+        val currentTts = tts
+        if (currentTts != null) {
+            return currentTts.engines
+        }
+        val tempTts = TextToSpeech(context, null)
+        val engines = tempTts.engines
+        tempTts.shutdown()
+        return engines
     }
 
     private fun setupUtteranceListener() {

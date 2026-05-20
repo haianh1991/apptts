@@ -21,4 +21,9 @@ class SettingsRepository(context: Context) {
     var ttsPitch: Float
         get() = prefs.getFloat("tts_pitch", 1.0f)
         set(value) = prefs.edit().putFloat("tts_pitch", value).apply()
+
+    var ttsEngine: String
+        get() = prefs.getString("tts_engine", "") ?: ""
+        set(value) = prefs.edit().putString("tts_engine", value).apply()
 }
+

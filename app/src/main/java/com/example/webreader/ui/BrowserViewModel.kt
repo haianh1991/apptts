@@ -179,9 +179,16 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun updateTtsSettings(speed: Float, pitch: Float) {
+    fun updateTtsSettings(speed: Float, pitch: Float, engine: String) {
         settings.ttsSpeed = speed
         settings.ttsPitch = pitch
+        
+        val engineChanged = settings.ttsEngine != engine
+        if (engineChanged) {
+            settings.ttsEngine = engine
+            ttsManager.reinitialize()
+        }
+        
         // If speaking, restart current paragraph with new settings
         if (_isPlaying.value && _currentParagraphIndex.value in _paragraphs.value.indices) {
             playParagraph(_currentParagraphIndex.value)
