@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,7 +69,8 @@ fun SettingsScreen(
     var isEngineDropdownExpanded by remember { mutableStateOf(false) }
 
     val availableEngines = remember { viewModel.ttsManager.getAvailableTtsEngines() }
-    val activeEngineLabel = availableEngines.find { it.name == selectedEngine }?.label ?: selectedEngine.ifBlank { "Mặc định hệ thống" }
+    val activeEngineLabel = availableEngines.find { it.name == selectedEngine }?.label 
+        ?: if (selectedEngine == "com.google.android.tts") "Google TTS (Buộc kích hoạt)" else selectedEngine.ifBlank { "Mặc định hệ thống" }
 
     val models = listOf(
         "gemini-3.5-flash",
@@ -121,8 +123,10 @@ fun SettingsScreen(
                         value = apiKey,
                         onValueChange = { apiKey = it },
                         label = { Text("Gemini API Key") },
+                        placeholder = { Text("Dán các API key tại đây, cách nhau bởi dấu phẩy hoặc dòng mới") },
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
+                        singleLine = false,
+                        maxLines = 4,
                         visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
                             IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
@@ -134,20 +138,32 @@ fun SettingsScreen(
                         }
                     )
 
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.Info,
-                            contentDescription = "Info",
-                            tint = MaterialTheme.colorScheme.outline,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Info,
+                                contentDescription = "Info",
+                                tint = MaterialTheme.colorScheme.outline,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            Text(
+                                text = "Hỗ trợ nhiều khóa API để tự động xoay vòng khi có lỗi.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                         Text(
-                            text = "Lấy khóa API miễn phí từ Google AI Studio.",
+                            text = "Lấy khóa API miễn phí từ Google AI Studio. Có thể dán danh sách khóa cách nhau bởi dấu phẩy hoặc ngắt dòng.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline
+                            color = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.padding(start = 28.dp)
                         )
                     }
 
@@ -227,6 +243,17 @@ fun SettingsScreen(
                                     isEngineDropdownExpanded = false
                                 }
                             )
+                            // check if Google TTS is already in availableEngines
+                            val hasGoogleTts = availableEngines.any { it.name == "com.google.android.tts" }
+                            if (!hasGoogleTts) {
+                                DropdownMenuItem(
+                                    text = { Text("Google TTS (Buộc kích hoạt)") },
+                                    onClick = {
+                                        selectedEngine = "com.google.android.tts"
+                                        isEngineDropdownExpanded = false
+                                    }
+                                )
+                            }
                             availableEngines.forEach { engine ->
                                 DropdownMenuItem(
                                     text = { Text(engine.label) },

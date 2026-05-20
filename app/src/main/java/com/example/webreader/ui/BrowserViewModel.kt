@@ -8,9 +8,13 @@ import com.example.webreader.data.SettingsRepository
 import com.example.webreader.data.TtsManager
 import com.example.webreader.data.QueueItem
 import com.example.webreader.data.QueueRepository
+import com.example.webreader.data.BookmarkItem
+import com.example.webreader.data.BookmarkRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
 
 class BrowserViewModel(application: Application) : AndroidViewModel(application) {
@@ -24,6 +28,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private val geminiManager = GeminiManager()
     val ttsManager = TtsManager(application)
     val queueRepository = QueueRepository(application)
+    val bookmarkRepository = BookmarkRepository(application)
 
     private val _queue = MutableStateFlow<List<QueueItem>>(emptyList())
     val queue: StateFlow<List<QueueItem>> = _queue
@@ -33,6 +38,15 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     private val _url = MutableStateFlow("https://news.google.com")
     val url: StateFlow<String> = _url
+
+    private val _bookmarks = MutableStateFlow<List<BookmarkItem>>(emptyList())
+    val bookmarks: StateFlow<List<BookmarkItem>> = _bookmarks
+
+    private val _isCurrentPageBookmarked = MutableStateFlow(false)
+    val isCurrentPageBookmarked: StateFlow<Boolean> = _isCurrentPageBookmarked
+
+    private val _navigationRequest = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val navigationRequest: SharedFlow<String> = _navigationRequest
 
     private val _title = MutableStateFlow("Trình duyệt")
     val title: StateFlow<String> = _title
@@ -68,6 +82,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     init {
         activeInstance = this
         _queue.value = queueRepository.getQueue()
+        _bookmarks.value = bookmarkRepository.getBookmarks()
+        updateBookmarkStatus()
         ttsManager.setCallbacks(
             onStart = { index ->
                 _currentParagraphIndex.value = index
@@ -211,6 +227,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 _paragraphs.value = rawParagraphs
                 _title.value = title
                 _url.value = url
+                updateBookmarkStatus()
                 if (rawParagraphs.isNotEmpty()) {
                     _currentQueueItemIndex.value = -1
                     playParagraph(0)
@@ -352,6 +369,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     fun setUrl(newUrl: String) {
         _url.value = newUrl
+        updateBookmarkStatus()
     }
 
     fun setTitle(newTitle: String) {
@@ -369,9 +387,45 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     fun setShowReaderSheet(show: Boolean) {
         _showReaderSheet.value = show
-        if (!show) {
-            pauseReading()
+    }
+
+    private fun updateBookmarkStatus() {
+        val currentUrl = _url.value
+        _isCurrentPageBookmarked.value = _bookmarks.value.any { it.url == currentUrl }
+    }
+
+    fun toggleBookmarkCurrentPage() {
+        val currentUrl = _url.value
+        val currentTitle = _title.value
+        val currentList = _bookmarks.value.toMutableList()
+        val existingIndex = currentList.indexOfFirst { it.url == currentUrl }
+        
+        if (existingIndex != -1) {
+            currentList.removeAt(existingIndex)
+        } else {
+            currentList.add(
+                BookmarkItem(
+                    id = java.util.UUID.randomUUID().toString(),
+                    title = currentTitle,
+                    url = currentUrl
+                )
+            )
         }
+        
+        _bookmarks.value = currentList
+        bookmarkRepository.saveBookmarks(currentList)
+        updateBookmarkStatus()
+    }
+
+    fun deleteBookmark(item: BookmarkItem) {
+        val currentList = _bookmarks.value.filter { it.id != item.id }
+        _bookmarks.value = currentList
+        bookmarkRepository.saveBookmarks(currentList)
+        updateBookmarkStatus()
+    }
+
+    fun loadUrlInBrowser(newUrl: String) {
+        _navigationRequest.tryEmit(newUrl)
     }
 
     fun updateTtsSettings(speed: Float, pitch: Float, engine: String) {

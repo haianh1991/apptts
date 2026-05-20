@@ -27,26 +27,42 @@ class TtsManager(private val context: Context) {
         initializeTts()
     }
 
+    private fun configureTtsAfterInit(): Boolean {
+        val localeVi = Locale("vi", "VN")
+        val result = tts?.setLanguage(localeVi)
+        return if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+            Log.e("TtsManager", "Tiếng Việt không được hỗ trợ trên thiết bị này.")
+            _isLanguageSupported.value = false
+            false
+        } else {
+            Log.d("TtsManager", "Đã cấu hình tiếng Việt thành công cho TTS.")
+            _isLanguageSupported.value = true
+            true
+        }
+    }
+
     private fun initializeTts() {
         val selectedEngine = settings.ttsEngine
         val initListener = TextToSpeech.OnInitListener { status ->
             if (status == TextToSpeech.SUCCESS) {
-                val localeVi = Locale("vi", "VN")
-                val result = tts?.setLanguage(localeVi)
-                
-                if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    Log.e("TtsManager", "Tiếng Việt không được hỗ trợ trên thiết bị này.")
-                    _isLanguageSupported.value = false
-                } else {
-                    Log.d("TtsManager", "Đã cấu hình tiếng Việt thành công cho TTS.")
-                    _isLanguageSupported.value = true
-                }
-                
+                configureTtsAfterInit()
                 _isInitialized.value = true
                 setupUtteranceListener()
             } else {
-                Log.e("TtsManager", "Không thể khởi tạo TextToSpeech.")
-                _isInitialized.value = false
+                Log.e("TtsManager", "Không thể khởi tạo TextToSpeech với engine: $selectedEngine. Thử lại với mặc định.")
+                if (selectedEngine.isNotBlank()) {
+                    tts = TextToSpeech(context) { defaultStatus ->
+                        if (defaultStatus == TextToSpeech.SUCCESS) {
+                            configureTtsAfterInit()
+                            _isInitialized.value = true
+                            setupUtteranceListener()
+                        } else {
+                            _isInitialized.value = false
+                        }
+                    }
+                } else {
+                    _isInitialized.value = false
+                }
             }
         }
 

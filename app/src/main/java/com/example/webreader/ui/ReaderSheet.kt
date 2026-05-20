@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.foundation.background
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -70,6 +71,7 @@ fun ReaderSheet(
     val errorMessage by viewModel.errorMessage.collectAsState()
     val title by viewModel.title.collectAsState()
     val queue by viewModel.queue.collectAsState()
+    val bookmarks by viewModel.bookmarks.collectAsState()
     val currentQueueItemIndex by viewModel.currentQueueItemIndex.collectAsState()
     var activeTab by remember { mutableIntStateOf(0) }
 
@@ -134,7 +136,7 @@ fun ReaderSheet(
                     .padding(horizontal = 16.dp)
             )
 
-            // Giao diện chuyển đổi Tab (Nội dung & Hàng chờ)
+            // Giao diện chuyển đổi Tab (Nội dung, Hàng chờ & Đánh dấu)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -185,6 +187,26 @@ fun ReaderSheet(
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
+
+                // Tab Đánh dấu trang
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (activeTab == 2) MaterialTheme.colorScheme.primary else Color.Transparent
+                        )
+                        .clickable { activeTab = 2 },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Đánh dấu (${bookmarks.size})",
+                        color = if (activeTab == 2) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
 
             // Vùng hiển thị nội dung chính
@@ -194,275 +216,395 @@ fun ReaderSheet(
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                if (activeTab == 0) {
-                    when {
-                        isTranslating -> {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(50.dp),
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    text = "Đang dịch trang web bằng Gemini AI...",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    text = "Quá trình này có thể mất vài giây tùy thuộc vào độ dài trang.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.outline,
-                                    modifier = Modifier.padding(top = 4.dp),
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        }
-
-                        errorMessage != null -> {
-                            Column(
-                                modifier = Modifier.padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Text(
-                                    text = "Đã xảy ra lỗi",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.error,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = errorMessage ?: "",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    textAlign = TextAlign.Center,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                if (errorMessage!!.contains("API Key")) {
-                                    Button(onClick = onOpenSettings) {
-                                        Text("Đi đến Cài đặt")
-                                    }
-                                } else {
-                                    OutlinedButton(onClick = { viewModel.clearError() }) {
-                                        Text("Bỏ qua lỗi")
-                                    }
+                when (activeTab) {
+                    0 -> {
+                        when {
+                            isTranslating -> {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(50.dp),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "Đang dịch trang web bằng Gemini AI...",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = "Quá trình này có thể mất vài giây tùy thuộc vào độ dài trang.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.outline,
+                                        modifier = Modifier.padding(top = 4.dp),
+                                        textAlign = TextAlign.Center
+                                    )
                                 }
                             }
-                        }
 
-                        paragraphs.isEmpty() -> {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                                modifier = Modifier.padding(16.dp)
-                            ) {
-                                Text(
-                                    text = "Không có nội dung dịch.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.outline
-                                )
-                                Text(
-                                    text = "Hãy tải một trang web và nhấn nút Dịch ở góc màn hình.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.outline,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        }
-
-                        else -> {
-                            LazyColumn(
-                                state = listState,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                item {
+                            errorMessage != null -> {
+                                Column(
+                                    modifier = Modifier.padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = "Đã xảy ra lỗi",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.error,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(
-                                        text = title,
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(bottom = 12.dp)
+                                        text = errorMessage ?: "",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        textAlign = TextAlign.Center,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                }
-
-                                itemsIndexed(paragraphs) { index, paragraph ->
-                                    val isHighlighted = index == currentIndex
-                                    val containerColor by animateColorAsState(
-                                        targetValue = if (isHighlighted) {
-                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
-                                        } else {
-                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                                        },
-                                        animationSpec = tween(durationMillis = 300),
-                                        label = "containerColor"
-                                    )
-
-                                    val borderStroke = if (isHighlighted) {
-                                        BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    if (errorMessage!!.contains("API Key")) {
+                                        Button(onClick = onOpenSettings) {
+                                            Text("Đi đến Cài đặt")
+                                        }
                                     } else {
-                                        null
-                                    }
-
-                                    Card(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .clickable { viewModel.playParagraph(index) },
-                                        colors = CardDefaults.cardColors(containerColor = containerColor),
-                                        border = borderStroke
-                                    ) {
-                                        Text(
-                                            text = paragraph,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            modifier = Modifier.padding(14.dp),
-                                            lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.25f
-                                        )
+                                        OutlinedButton(onClick = { viewModel.clearError() }) {
+                                            Text("Bỏ qua lỗi")
+                                        }
                                     }
                                 }
-                                item {
-                                    Spacer(modifier = Modifier.height(24.dp))
-                                }
                             }
-                        }
-                    }
-                } else {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Danh sách bài viết",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            if (queue.isNotEmpty()) {
-                                TextButton(onClick = { viewModel.clearQueue() }) {
-                                    Text(
-                                        text = "Xóa tất cả",
-                                        color = MaterialTheme.colorScheme.error
-                                    )
-                                }
-                            }
-                        }
 
-                        if (queue.isEmpty()) {
-                            Box(
-                                modifier = Modifier.weight(1f).fillMaxWidth(),
-                                contentAlignment = Alignment.Center
-                            ) {
+                            paragraphs.isEmpty() -> {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.Center,
                                     modifier = Modifier.padding(16.dp)
                                 ) {
                                     Text(
-                                        text = "Hàng chờ trống",
+                                        text = "Không có nội dung dịch.",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.outline
                                     )
-                                    Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "Bạn có thể dịch nhiều trang để thêm vào đây và nghe liên tục.",
+                                        text = "Hãy tải một trang web và nhấn nút Dịch ở góc màn hình.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.outline,
                                         textAlign = TextAlign.Center
                                     )
                                 }
                             }
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier.weight(1f).fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                itemsIndexed(queue) { index, item ->
-                                    val isCurrent = index == currentQueueItemIndex
-                                    val containerColor = if (isCurrent) {
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
-                                    }
-                                    val borderColor = if (isCurrent) {
-                                        BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                                    } else {
-                                        BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+
+                            else -> {
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    item {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = title,
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(bottom = 12.dp)
+                                        )
                                     }
 
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.cardColors(containerColor = containerColor),
-                                        border = borderColor
-                                    ) {
-                                        Row(
+                                    itemsIndexed(paragraphs) { index, paragraph ->
+                                        val isHighlighted = index == currentIndex
+                                        val containerColor by animateColorAsState(
+                                            targetValue = if (isHighlighted) {
+                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
+                                            } else {
+                                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                            },
+                                            animationSpec = tween(durationMillis = 300),
+                                            label = "containerColor"
+                                        )
+
+                                        val borderStroke = if (isHighlighted) {
+                                            BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+                                        } else {
+                                            null
+                                        }
+
+                                        Card(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(12.dp),
-                                            verticalAlignment = Alignment.CenterVertically
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable { viewModel.playParagraph(index) },
+                                            colors = CardDefaults.cardColors(containerColor = containerColor),
+                                            border = borderStroke
                                         ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = item.title,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    maxLines = 2
-                                                )
-                                                Spacer(modifier = Modifier.height(4.dp))
-                                                Text(
-                                                    text = item.url,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.outline,
-                                                    maxLines = 1
-                                                )
-                                                Spacer(modifier = Modifier.height(2.dp))
-                                                Text(
-                                                    text = "${item.paragraphs.size} đoạn văn",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
+                                            Text(
+                                                text = paragraph,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                modifier = Modifier.padding(14.dp),
+                                                lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.25f
+                                            )
+                                        }
+                                    }
+                                    item {
+                                        Spacer(modifier = Modifier.height(24.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    1 -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Danh sách bài viết",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (queue.isNotEmpty()) {
+                                    TextButton(onClick = { viewModel.clearQueue() }) {
+                                        Text(
+                                            text = "Xóa tất cả",
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
+                            }
 
-                                            Spacer(modifier = Modifier.width(8.dp))
+                            if (queue.isEmpty()) {
+                                Box(
+                                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center,
+                                        modifier = Modifier.padding(16.dp)
+                                    ) {
+                                        Text(
+                                            text = "Hàng chờ trống",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "Bạn có thể dịch nhiều trang để thêm vào đây và nghe liên tục.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.outline,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            } else {
+                                LazyColumn(
+                                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    itemsIndexed(queue) { index, item ->
+                                        val isCurrent = index == currentQueueItemIndex
+                                        val containerColor = if (isCurrent) {
+                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                        } else {
+                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                                        }
+                                        val borderColor = if (isCurrent) {
+                                            BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                                        } else {
+                                            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                        }
 
-                                            IconButton(
-                                                onClick = {
-                                                    if (isCurrent && isPlaying) {
-                                                        viewModel.pauseReading()
-                                                    } else {
-                                                        viewModel.playQueueItem(index)
-                                                        activeTab = 0
-                                                    }
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(containerColor = containerColor),
+                                            border = borderColor
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = item.title,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        maxLines = 2
+                                                    )
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = item.url,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.outline,
+                                                        maxLines = 1
+                                                    )
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Text(
+                                                        text = "${item.paragraphs.size} đoạn văn",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
                                                 }
-                                            ) {
-                                                Icon(
-                                                    imageVector = if (isCurrent && isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                                    contentDescription = "Phát",
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
 
-                                            IconButton(
-                                                onClick = { viewModel.removeQueueItem(index) }
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Filled.Close,
-                                                    contentDescription = "Xóa",
-                                                    tint = MaterialTheme.colorScheme.error
-                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+
+                                                IconButton(
+                                                    onClick = {
+                                                        if (isCurrent && isPlaying) {
+                                                            viewModel.pauseReading()
+                                                        } else {
+                                                            viewModel.playQueueItem(index)
+                                                            activeTab = 0
+                                                        }
+                                                    }
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (isCurrent && isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                                        contentDescription = "Phát",
+                                                        tint = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+
+                                                IconButton(
+                                                    onClick = { viewModel.removeQueueItem(index) }
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Filled.Close,
+                                                        contentDescription = "Xóa",
+                                                        tint = MaterialTheme.colorScheme.error
+                                                    )
+                                                }
                                             }
                                         }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    2 -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Trang đã lưu",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            if (bookmarks.isEmpty()) {
+                                Box(
+                                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center,
+                                        modifier = Modifier.padding(16.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Bookmark,
+                                            contentDescription = "Chưa có đánh dấu",
+                                            tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                                            modifier = Modifier.size(48.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Text(
+                                            text = "Không có trang đánh dấu",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "Bấm biểu tượng Bookmark trên ô địa chỉ để lưu các trang yêu thích của bạn.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.outline,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            } else {
+                                LazyColumn(
+                                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    itemsIndexed(bookmarks) { index, item ->
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    viewModel.loadUrlInBrowser(item.url)
+                                                    viewModel.setShowReaderSheet(false)
+                                                },
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                                            ),
+                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Filled.Bookmark,
+                                                    contentDescription = "Trang đánh dấu",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = item.title,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        maxLines = 2
+                                                    )
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = item.url,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.outline,
+                                                        maxLines = 1
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                IconButton(
+                                                    onClick = { viewModel.deleteBookmark(item) }
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Filled.Close,
+                                                        contentDescription = "Xóa đánh dấu",
+                                                        tint = MaterialTheme.colorScheme.error
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    item {
+                                        Spacer(modifier = Modifier.height(16.dp))
                                     }
                                 }
                             }

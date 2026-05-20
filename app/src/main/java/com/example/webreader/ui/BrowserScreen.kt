@@ -30,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -98,6 +99,13 @@ fun BrowserScreen(
         }
     }
 
+    // Lắng nghe yêu cầu điều hướng từ ViewModel (ví dụ: khi nhấn vào bookmark)
+    LaunchedEffect(Unit) {
+        viewModel.navigationRequest.collect { targetUrl ->
+            webViewInstance?.loadUrl(targetUrl)
+        }
+    }
+
     // Xử lý nút Back của hệ thống
     BackHandler(enabled = canGoBack || showReaderSheet) {
         if (showReaderSheet) {
@@ -153,6 +161,20 @@ fun BrowserScreen(
                                 webViewInstance?.loadUrl(formattedUrl)
                             }
                         ),
+                        trailingIcon = {
+                            val isBookmarked by viewModel.isCurrentPageBookmarked.collectAsState()
+                            IconButton(onClick = { viewModel.toggleBookmarkCurrentPage() }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Bookmark,
+                                    contentDescription = "Đánh dấu trang",
+                                    tint = if (isBookmarked) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                    }
+                                )
+                            }
+                        },
                         shape = RoundedCornerShape(20.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -251,7 +273,9 @@ fun BrowserScreen(
                         .padding(24.dp),
                     horizontalAlignment = Alignment.End
                 ) {
-                    if (queue.isNotEmpty()) {
+                    val bookmarks by viewModel.bookmarks.collectAsState()
+                    val paragraphs by viewModel.paragraphs.collectAsState()
+                    if (queue.isNotEmpty() || bookmarks.isNotEmpty() || paragraphs.isNotEmpty()) {
                         FloatingActionButton(
                             onClick = {
                                 viewModel.setShowReaderSheet(true)
@@ -262,7 +286,7 @@ fun BrowserScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.List,
-                                contentDescription = "Xem hàng chờ",
+                                contentDescription = "Xem thư viện",
                                 modifier = Modifier.size(24.dp)
                             )
                         }
