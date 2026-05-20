@@ -33,6 +33,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,6 +47,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
@@ -61,6 +65,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -91,6 +96,7 @@ fun BrowserScreen(
     var extractedTextForQueue by remember { mutableStateOf("") }
     var capturedTitleForQueue by remember { mutableStateOf("") }
     var capturedUrlForQueue by remember { mutableStateOf("") }
+    var isAddressBarFocused by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
 
     // Đồng bộ ô nhập địa chỉ khi URL thay đổi (ví dụ: nhấn link trong WebView)
@@ -125,29 +131,23 @@ fun BrowserScreen(
                         .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Nút Back
-                    IconButton(
-                        onClick = { webViewInstance?.goBack() },
-                        enabled = canGoBack
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại")
+                    if (isAddressBarFocused) {
+                        // Nút Back để hủy focus và thoát chế độ nhập URL (tương tự Chrome)
+                        IconButton(onClick = { focusManager.clearFocus() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Hủy nhập")
+                        }
                     }
 
-                    // Nút Forward
-                    IconButton(
-                        onClick = { webViewInstance?.goForward() },
-                        enabled = canGoForward
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Tiến tới")
-                    }
-
-                    // Ô nhập URL thiết kế bo góc, mờ
+                    // Ô nhập URL thiết kế bo góc, mờ, tự động giãn rộng khi focus
                     OutlinedTextField(
                         value = urlInputText,
                         onValueChange = { urlInputText = it },
                         modifier = Modifier
                             .weight(1f)
-                            .padding(horizontal = 4.dp),
+                            .padding(horizontal = 4.dp)
+                            .onFocusChanged { focusState ->
+                                isAddressBarFocused = focusState.isFocused
+                            },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             imeAction = ImeAction.Go
@@ -162,6 +162,15 @@ fun BrowserScreen(
                                 webViewInstance?.loadUrl(formattedUrl)
                             }
                         ),
+                        trailingIcon = if (isAddressBarFocused && urlInputText.isNotEmpty()) {
+                            {
+                                IconButton(onClick = { urlInputText = "" }) {
+                                    Icon(Icons.Filled.Close, contentDescription = "Xóa")
+                                }
+                            }
+                        } else {
+                            null
+                        },
                         shape = RoundedCornerShape(20.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -169,28 +178,53 @@ fun BrowserScreen(
                         )
                     )
 
-                    // Nút Đánh dấu trang (Star)
-                    val isBookmarked by viewModel.isCurrentPageBookmarked.collectAsState()
-                    IconButton(onClick = { viewModel.toggleBookmarkCurrentPage() }) {
-                        Icon(
-                            imageVector = Icons.Filled.Star,
-                            contentDescription = "Đánh dấu trang",
-                            tint = if (isBookmarked) {
-                                Color(0xFFFFC107) // Màu vàng Gold của ngôi sao đánh dấu
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    if (!isAddressBarFocused) {
+                        // Nút Đánh dấu trang (Star) - nằm bên phải, luôn xuất hiện khi không nhập URL
+                        val isBookmarked by viewModel.isCurrentPageBookmarked.collectAsState()
+                        IconButton(onClick = { viewModel.toggleBookmarkCurrentPage() }) {
+                            Icon(
+                                imageVector = Icons.Filled.Star,
+                                contentDescription = "Đánh dấu trang",
+                                tint = if (isBookmarked) {
+                                    Color(0xFFFFC107) // Màu vàng Gold của ngôi sao đã đánh dấu
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                }
+                            )
+                        }
+
+                        // Nút Menu 3 chấm dọc gom Refresh và Settings (tương tự Google Chrome)
+                        var showMenu by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { showMenu = true }) {
+                                Icon(Icons.Filled.MoreVert, contentDescription = "Menu tùy chọn")
                             }
-                        )
-                    }
-
-                    // Nút Refresh
-                    IconButton(onClick = { webViewInstance?.reload() }) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Tải lại")
-                    }
-
-                    // Nút Cài đặt
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Cài đặt")
+                            DropdownMenu(
+                                expanded = showMenu,
+                                onDismissRequest = { showMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Tải lại trang") },
+                                    onClick = {
+                                        showMenu = false
+                                        webViewInstance?.reload()
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Filled.Refresh, contentDescription = "Tải lại")
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Cài đặt") },
+                                    onClick = {
+                                        showMenu = false
+                                        onOpenSettings()
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Filled.Settings, contentDescription = "Cài đặt")
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
 
