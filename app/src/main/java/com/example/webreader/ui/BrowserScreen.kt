@@ -30,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,6 +43,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -55,7 +60,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.viewinterop.AndroidView
 import org.json.JSONTokener
 import androidx.compose.ui.graphics.Color
@@ -77,6 +85,8 @@ fun BrowserScreen(
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
     var urlInputText by remember { mutableStateOf(currentUrl) }
     var pageLoadProgress by remember { mutableFloatStateOf(0f) }
+    var showModeDialog by remember { mutableStateOf(false) }
+    var extractedTextForQueue by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
 
     // Đồng bộ ô nhập địa chỉ khi URL thay đổi (ví dụ: nhấn link trong WebView)
@@ -232,56 +242,114 @@ fun BrowserScreen(
 
             // Nút nổi trích xuất văn bản & Dịch sang Tiếng Việt (FAB)
             if (!showReaderSheet) {
-                FloatingActionButton(
-                    onClick = {
-                        webViewInstance?.let { webView ->
-                            // Script trích xuất nội dung văn bản chất lượng cao từ DOM
-                            val jsExtractor = """
-                                (function() {
-                                    var elements = document.querySelectorAll('h1, h2, h3, p, article');
-                                    var textList = [];
-                                    var seen = new Set();
-                                    elements.forEach(function(el) {
-                                        var text = el.innerText.trim();
-                                        if (text.length > 25 && !seen.has(text)) {
-                                            textList.push(text);
-                                            seen.add(text);
-                                        }
-                                    });
-                                    if (textList.length < 3) {
-                                        return document.body.innerText;
-                                    }
-                                    return textList.join('\n\n');
-                                })()
-                            """.trimIndent()
-
-                            webView.evaluateJavascript(jsExtractor) { result ->
-                                if (result != null && result != "null" && result != "\"\"") {
-                                    val cleanText = try {
-                                        JSONTokener(result).nextValue() as String
-                                    } catch (e: Exception) {
-                                        // Giải mã thủ công nếu JSONTokener thất bại
-                                        result.replace("\"", "").replace("\\n", "\n")
-                                    }
-                                    viewModel.translateWebpage(cleanText)
-                                } else {
-                                    viewModel.translateWebpage("")
-                                }
-                            }
-                        }
-                    },
+                val queue by viewModel.queue.collectAsState()
+                Column(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(24.dp),
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
+                    horizontalAlignment = Alignment.End
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Translate,
-                        contentDescription = "Dịch & Đọc",
-                        modifier = Modifier.size(28.dp)
-                    )
+                    if (queue.isNotEmpty()) {
+                        FloatingActionButton(
+                            onClick = {
+                                viewModel.setShowReaderSheet(true)
+                            },
+                            modifier = Modifier.padding(bottom = 16.dp),
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.List,
+                                contentDescription = "Xem hàng chờ",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    FloatingActionButton(
+                        onClick = {
+                            webViewInstance?.let { webView ->
+                                // Script trích xuất nội dung văn bản chất lượng cao từ DOM
+                                val jsExtractor = """
+                                    (function() {
+                                        var elements = document.querySelectorAll('h1, h2, h3, p, article');
+                                        var textList = [];
+                                        var seen = new Set();
+                                        elements.forEach(function(el) {
+                                            var text = el.innerText.trim();
+                                            if (text.length > 25 && !seen.has(text)) {
+                                                textList.push(text);
+                                                seen.add(text);
+                                            }
+                                        });
+                                        if (textList.length < 3) {
+                                            return document.body.innerText;
+                                        }
+                                        return textList.join('\n\n');
+                                    })()
+                                """.trimIndent()
+
+                                webView.evaluateJavascript(jsExtractor) { result ->
+                                    if (result != null && result != "null" && result != "\"\"") {
+                                        val cleanText = try {
+                                            JSONTokener(result).nextValue() as String
+                                        } catch (e: Exception) {
+                                            // Giải mã thủ công nếu JSONTokener thất bại
+                                            result.replace("\"", "").replace("\\n", "\n")
+                                        }
+                                        extractedTextForQueue = cleanText
+                                        showModeDialog = true
+                                    } else {
+                                        extractedTextForQueue = ""
+                                        showModeDialog = true
+                                    }
+                                }
+                            }
+                        },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Translate,
+                            contentDescription = "Dịch & Đọc",
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
+            }
+
+            if (showModeDialog) {
+                AlertDialog(
+                    onDismissRequest = { showModeDialog = false },
+                    title = { Text(text = "Lựa chọn chế độ đọc", fontWeight = FontWeight.Bold) },
+                    text = { Text(text = "Bạn muốn dịch và nghe trang này ngay lập tức, hay dịch dưới nền và thêm vào hàng chờ để nghe liên tục?") },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showModeDialog = false
+                                viewModel.translateWebpage(extractedTextForQueue)
+                            }
+                        ) {
+                            Text("Đọc ngay")
+                        }
+                    },
+                    dismissButton = {
+                        Row {
+                            OutlinedButton(
+                                onClick = {
+                                    showModeDialog = false
+                                    viewModel.translateAndAddToQueue(extractedTextForQueue)
+                                }
+                            ) {
+                                Text("Thêm vào hàng chờ")
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(onClick = { showModeDialog = false }) {
+                                Text("Hủy")
+                            }
+                        }
+                    }
+                )
             }
 
             // Reader Sheet kéo lên từ dưới (Có hoạt ảnh trượt)

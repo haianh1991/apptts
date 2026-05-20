@@ -10,6 +10,15 @@ class SettingsRepository(context: Context) {
         get() = prefs.getString("gemini_api_key", "") ?: ""
         set(value) = prefs.edit().putString("gemini_api_key", value).apply()
 
+    val geminiApiKeys: List<String>
+        get() {
+            val raw = geminiApiKey
+            if (raw.isBlank()) return emptyList()
+            return raw.split(Regex("[,\n]"))
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+        }
+
     var geminiModel: String
         get() = prefs.getString("gemini_model", "gemini-1.5-flash") ?: "gemini-1.5-flash"
         set(value) = prefs.edit().putString("gemini_model", value).apply()

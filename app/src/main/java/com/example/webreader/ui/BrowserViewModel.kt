@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.webreader.data.GeminiManager
 import com.example.webreader.data.SettingsRepository
 import com.example.webreader.data.TtsManager
+import com.example.webreader.data.QueueItem
+import com.example.webreader.data.QueueRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -20,6 +22,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val settings = SettingsRepository(application)
     private val geminiManager = GeminiManager()
     val ttsManager = TtsManager(application)
+    val queueRepository = QueueRepository(application)
+
+    private val _queue = MutableStateFlow<List<QueueItem>>(emptyList())
+    val queue: StateFlow<List<QueueItem>> = _queue
+
+    private val _currentQueueItemIndex = MutableStateFlow<Int>(-1)
+    val currentQueueItemIndex: StateFlow<Int> = _currentQueueItemIndex
 
     private val _url = MutableStateFlow("https://news.google.com")
     val url: StateFlow<String> = _url
@@ -57,6 +66,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         activeInstance = this
+        _queue.value = queueRepository.getQueue()
         ttsManager.setCallbacks(
             onStart = { index ->
                 _currentParagraphIndex.value = index
@@ -73,15 +83,31 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     private fun playNextParagraph(completedIndex: Int) {
         viewModelScope.launch {
-            val nextIndex = completedIndex + 1
-            if (nextIndex < _paragraphs.value.size) {
+            val nextIndex = if (completedIndex == -2) 0 else completedIndex + 1
+            if (nextIndex in _paragraphs.value.indices) {
                 _currentParagraphIndex.value = nextIndex
                 val text = _paragraphs.value[nextIndex]
                 ttsManager.speak(text, nextIndex, settings.ttsSpeed, settings.ttsPitch)
             } else {
-                _isPlaying.value = false
-                _currentParagraphIndex.value = -1
-                ttsManager.stop()
+                // Finished paragraphs of the current item! Check if there's a next queue item
+                val qList = _queue.value
+                val qIndex = _currentQueueItemIndex.value
+                if (qIndex != -1 && qIndex + 1 < qList.size) {
+                    val nextQIndex = qIndex + 1
+                    _currentQueueItemIndex.value = nextQIndex
+                    val nextItem = qList[nextQIndex]
+                    _paragraphs.value = nextItem.paragraphs
+                    _title.value = nextItem.title
+                    _currentParagraphIndex.value = -2 // Announces title first
+                    
+                    val announceText = "Bắt đầu đọc bài viết: ${nextItem.title}"
+                    ttsManager.speak(announceText, -2, settings.ttsSpeed, settings.ttsPitch)
+                } else {
+                    _isPlaying.value = false
+                    _currentParagraphIndex.value = -1
+                    _currentQueueItemIndex.value = -1
+                    ttsManager.stop()
+                }
             }
         }
     }
@@ -103,7 +129,11 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     fun resumeReading() {
         val index = _currentParagraphIndex.value
         val paragraphsList = _paragraphs.value
-        if (paragraphsList.isNotEmpty()) {
+        if (index == -2) {
+            _isPlaying.value = true
+            val announceText = "Bắt đầu đọc bài viết: ${_title.value}"
+            ttsManager.speak(announceText, -2, settings.ttsSpeed, settings.ttsPitch)
+        } else if (paragraphsList.isNotEmpty()) {
             val targetIndex = if (index in paragraphsList.indices) index else 0
             _currentParagraphIndex.value = targetIndex
             _isPlaying.value = true
@@ -113,20 +143,46 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     fun playNext() {
         val index = _currentParagraphIndex.value
-        if (index + 1 < _paragraphs.value.size) {
+        val paragraphsList = _paragraphs.value
+        if (index == -2) {
+            if (paragraphsList.isNotEmpty()) {
+                playParagraph(0)
+            }
+        } else if (index + 1 < paragraphsList.size) {
             playParagraph(index + 1)
+        } else {
+            val qList = _queue.value
+            val qIndex = _currentQueueItemIndex.value
+            if (qIndex != -1 && qIndex + 1 < qList.size) {
+                playQueueItem(qIndex + 1)
+            }
         }
     }
 
     fun playPrevious() {
         val index = _currentParagraphIndex.value
-        if (index - 1 >= 0) {
+        if (index == -2) {
+            val qIndex = _currentQueueItemIndex.value
+            if (qIndex > 0) {
+                playQueueItem(qIndex - 1)
+            }
+        } else if (index - 1 >= 0) {
             playParagraph(index - 1)
+        } else if (index == 0) {
+            val qIndex = _currentQueueItemIndex.value
+            if (qIndex != -1) {
+                playQueueItem(qIndex)
+            }
+        } else {
+            val qIndex = _currentQueueItemIndex.value
+            if (qIndex > 0) {
+                playQueueItem(qIndex - 1)
+            }
         }
     }
 
     fun translateWebpage(text: String) {
-        if (settings.geminiApiKey.isBlank()) {
+        if (settings.geminiApiKeys.isEmpty()) {
             _errorMessage.value = "Vui lòng nhập API Key trong phần Cài đặt để dịch trang web."
             _showReaderSheet.value = true // Show reader sheet to display the error and prompt user
             return
@@ -141,7 +197,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
             val result = geminiManager.translateToVietnamese(
                 text = text,
-                apiKey = settings.geminiApiKey,
+                apiKeys = settings.geminiApiKeys,
                 modelName = settings.geminiModel
             )
 
@@ -153,6 +209,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 
                 _paragraphs.value = rawParagraphs
                 if (rawParagraphs.isNotEmpty()) {
+                    _currentQueueItemIndex.value = -1
                     playParagraph(0)
                 } else {
                     _errorMessage.value = "Bản dịch rỗng hoặc không phân tích được đoạn văn."
@@ -161,6 +218,108 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 _errorMessage.value = "Lỗi dịch thuật: ${exception.localizedMessage ?: "Không xác định"}"
             }
         }
+    }
+
+    fun translateAndAddToQueue(text: String) {
+        if (settings.geminiApiKeys.isEmpty()) {
+            _errorMessage.value = "Vui lòng nhập API Key trong phần Cài đặt để dịch trang web."
+            _showReaderSheet.value = true
+            return
+        }
+
+        viewModelScope.launch {
+            _isTranslating.value = true
+            _showReaderSheet.value = true
+            _errorMessage.value = null
+
+            val result = geminiManager.translateToVietnamese(
+                text = text,
+                apiKeys = settings.geminiApiKeys,
+                modelName = settings.geminiModel
+            )
+
+            _isTranslating.value = false
+            result.onSuccess { translatedText ->
+                val rawParagraphs = translatedText.split("\n\n")
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                
+                if (rawParagraphs.isNotEmpty()) {
+                    val newItem = QueueItem(
+                        id = java.util.UUID.randomUUID().toString(),
+                        title = _title.value,
+                        url = _url.value,
+                        paragraphs = rawParagraphs
+                    )
+                    val updatedQueue = _queue.value.toMutableList().apply { add(newItem) }
+                    _queue.value = updatedQueue
+                    queueRepository.saveQueue(updatedQueue)
+                    
+                    if (_currentQueueItemIndex.value == -1 && _paragraphs.value.isEmpty()) {
+                        loadQueueItem(updatedQueue.lastIndex)
+                    }
+                } else {
+                    _errorMessage.value = "Bản dịch rỗng hoặc không phân tích được đoạn văn."
+                }
+            }.onFailure { exception ->
+                _errorMessage.value = "Lỗi dịch thuật: ${exception.localizedMessage ?: "Không xác định"}"
+            }
+        }
+    }
+
+    fun loadQueueItem(index: Int) {
+        val qList = _queue.value
+        if (index in qList.indices) {
+            val item = qList[index]
+            _currentQueueItemIndex.value = index
+            _paragraphs.value = item.paragraphs
+            _title.value = item.title
+            _currentParagraphIndex.value = -1
+            _isPlaying.value = false
+        }
+    }
+
+    fun playQueueItem(index: Int) {
+        val qList = _queue.value
+        if (index in qList.indices) {
+            val item = qList[index]
+            _currentQueueItemIndex.value = index
+            _paragraphs.value = item.paragraphs
+            _title.value = item.title
+            _currentParagraphIndex.value = -2 // Announces title first
+            _isPlaying.value = true
+            val announceText = "Bắt đầu đọc bài viết: ${item.title}"
+            ttsManager.speak(announceText, -2, settings.ttsSpeed, settings.ttsPitch)
+        }
+    }
+
+    fun removeQueueItem(index: Int) {
+        val qList = _queue.value.toMutableList()
+        if (index in qList.indices) {
+            val currentIdx = _currentQueueItemIndex.value
+            if (currentIdx == index) {
+                pauseReading()
+                _paragraphs.value = emptyList()
+                _title.value = "Trình duyệt"
+                _currentParagraphIndex.value = -1
+                _currentQueueItemIndex.value = -1
+            } else if (currentIdx > index) {
+                _currentQueueItemIndex.value = currentIdx - 1
+            }
+            qList.removeAt(index)
+            _queue.value = qList
+            queueRepository.saveQueue(qList)
+        }
+    }
+
+    fun clearQueue() {
+        pauseReading()
+        _paragraphs.value = emptyList()
+        _title.value = "Trình duyệt"
+        _currentParagraphIndex.value = -1
+        _currentQueueItemIndex.value = -1
+        _queue.value = emptyList()
+        queueRepository.clearQueue()
     }
 
     fun setUrl(newUrl: String) {
