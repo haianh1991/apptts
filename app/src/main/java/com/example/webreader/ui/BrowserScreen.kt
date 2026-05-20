@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -161,26 +162,26 @@ fun BrowserScreen(
                                 webViewInstance?.loadUrl(formattedUrl)
                             }
                         ),
-                        trailingIcon = {
-                            val isBookmarked by viewModel.isCurrentPageBookmarked.collectAsState()
-                            IconButton(onClick = { viewModel.toggleBookmarkCurrentPage() }) {
-                                Icon(
-                                    imageVector = Icons.Filled.Bookmark,
-                                    contentDescription = "Đánh dấu trang",
-                                    tint = if (isBookmarked) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                    }
-                                )
-                            }
-                        },
                         shape = RoundedCornerShape(20.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.primary,
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
                         )
                     )
+
+                    // Nút Đánh dấu trang (Star)
+                    val isBookmarked by viewModel.isCurrentPageBookmarked.collectAsState()
+                    IconButton(onClick = { viewModel.toggleBookmarkCurrentPage() }) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = "Đánh dấu trang",
+                            tint = if (isBookmarked) {
+                                Color(0xFFFFC107) // Màu vàng Gold của ngôi sao đánh dấu
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            }
+                        )
+                    }
 
                     // Nút Refresh
                     IconButton(onClick = { webViewInstance?.reload() }) {
