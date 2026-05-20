@@ -11,6 +11,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class BrowserViewModel(application: Application) : AndroidViewModel(application) {
+    companion object {
+        @Volatile
+        var activeInstance: BrowserViewModel? = null
+            private set
+    }
+
     val settings = SettingsRepository(application)
     private val geminiManager = GeminiManager()
     val ttsManager = TtsManager(application)
@@ -50,6 +56,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val showReaderSheet: StateFlow<Boolean> = _showReaderSheet
 
     init {
+        activeInstance = this
         ttsManager.setCallbacks(
             onStart = { index ->
                 _currentParagraphIndex.value = index
@@ -74,6 +81,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             } else {
                 _isPlaying.value = false
                 _currentParagraphIndex.value = -1
+                ttsManager.stop()
             }
         }
     }
@@ -201,6 +209,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     override fun onCleared() {
         super.onCleared()
+        if (activeInstance == this) {
+            activeInstance = null
+        }
         ttsManager.shutdown()
     }
 }

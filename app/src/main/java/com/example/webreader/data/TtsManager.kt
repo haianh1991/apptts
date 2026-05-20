@@ -109,6 +109,9 @@ class TtsManager(private val context: Context) {
     }
 
     fun speak(text: String, paragraphIndex: Int, speed: Float = 1.0f, pitch: Float = 1.0f) {
+        val notificationText = if (text.length > 80) text.substring(0, 77) + "..." else text
+        TtsService.start(context, notificationText)
+
         tts?.apply {
             setSpeechRate(speed)
             setPitch(pitch)
@@ -121,10 +124,12 @@ class TtsManager(private val context: Context) {
 
     fun stop() {
         tts?.stop()
+        TtsService.stop(context)
     }
 
     fun shutdown() {
         tts?.shutdown()
         tts = null
+        TtsService.stop(context)
     }
 }
