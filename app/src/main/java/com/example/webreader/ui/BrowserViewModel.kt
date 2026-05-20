@@ -182,7 +182,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun translateWebpage(text: String) {
+    fun translateWebpage(text: String, title: String, url: String) {
         if (settings.geminiApiKeys.isEmpty()) {
             _errorMessage.value = "Vui lòng nhập API Key trong phần Cài đặt để dịch trang web."
             _showReaderSheet.value = true // Show reader sheet to display the error and prompt user
@@ -209,6 +209,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     .filter { it.isNotEmpty() }
                 
                 _paragraphs.value = rawParagraphs
+                _title.value = title
+                _url.value = url
                 if (rawParagraphs.isNotEmpty()) {
                     _currentQueueItemIndex.value = -1
                     playParagraph(0)
@@ -221,25 +223,27 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun translateAndAddToQueue(text: String) {
+    fun translateAndAddToQueue(text: String, title: String, url: String) {
         if (settings.geminiApiKeys.isEmpty()) {
             _errorMessage.value = "Vui lòng nhập API Key trong phần Cài đặt để dịch trang web."
             _showReaderSheet.value = true
             return
         }
 
-        viewModelScope.launch {
-            _isTranslating.value = true
-            _showReaderSheet.value = true
-            _errorMessage.value = null
+        // Show a non-blocking toast indicating background translation started
+        android.widget.Toast.makeText(
+            getApplication(),
+            "Bắt đầu dịch nền bài viết: $title...",
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
 
+        viewModelScope.launch {
             val result = geminiManager.translateToVietnamese(
                 text = text,
                 apiKeys = settings.geminiApiKeys,
                 modelName = settings.geminiModel
             )
 
-            _isTranslating.value = false
             result.onSuccess { translatedText ->
                 val rawParagraphs = translatedText.split("\n\n")
                     .map { it.trim() }
@@ -248,8 +252,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 if (rawParagraphs.isNotEmpty()) {
                     val newItem = QueueItem(
                         id = java.util.UUID.randomUUID().toString(),
-                        title = _title.value,
-                        url = _url.value,
+                        title = title,
+                        url = url,
                         paragraphs = rawParagraphs
                     )
                     val updatedQueue = _queue.value.toMutableList().apply { add(newItem) }
@@ -257,13 +261,36 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     queueRepository.saveQueue(updatedQueue)
                     
                     if (_currentQueueItemIndex.value == -1 && _paragraphs.value.isEmpty()) {
-                        loadQueueItem(updatedQueue.lastIndex)
+                        // Load the item if queue is empty
+                        val qList = _queue.value
+                        if (updatedQueue.lastIndex in qList.indices) {
+                            val item = qList[updatedQueue.lastIndex]
+                            _currentQueueItemIndex.value = updatedQueue.lastIndex
+                            _paragraphs.value = item.paragraphs
+                            _title.value = item.title
+                            _currentParagraphIndex.value = -1
+                            _isPlaying.value = false
+                        }
                     }
+                    
+                    android.widget.Toast.makeText(
+                        getApplication(),
+                        "Đã thêm vào hàng chờ: $title",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
                 } else {
-                    _errorMessage.value = "Bản dịch rỗng hoặc không phân tích được đoạn văn."
+                    android.widget.Toast.makeText(
+                        getApplication(),
+                        "Lỗi: Không phân tích được đoạn văn cho bài viết: $title",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
                 }
             }.onFailure { exception ->
-                _errorMessage.value = "Lỗi dịch thuật: ${exception.localizedMessage ?: "Không xác định"}"
+                android.widget.Toast.makeText(
+                    getApplication(),
+                    "Lỗi dịch thuật bài viết \"$title\": ${exception.localizedMessage ?: "Không xác định"}",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
             }
         }
     }

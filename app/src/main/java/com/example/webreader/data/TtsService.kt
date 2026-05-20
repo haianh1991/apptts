@@ -33,6 +33,7 @@ class TtsService : Service() {
         const val ACTION_PAUSE = "com.example.webreader.ACTION_PAUSE"
         const val ACTION_STOP = "com.example.webreader.ACTION_STOP"
         const val EXTRA_TITLE = "extra_title"
+        const val EXTRA_FROM_APP = "extra_from_app"
 
         fun start(context: Context, title: String) {
             val intent = Intent(context, TtsService::class.java).apply {
@@ -46,9 +47,10 @@ class TtsService : Service() {
             }
         }
 
-        fun stop(context: Context) {
+        fun stop(context: Context, fromApp: Boolean = false) {
             val intent = Intent(context, TtsService::class.java).apply {
                 action = ACTION_STOP
+                putExtra(EXTRA_FROM_APP, fromApp)
             }
             context.startService(intent)
         }
@@ -78,20 +80,26 @@ class TtsService : Service() {
                 setupMediaSession()
             }
             ACTION_PAUSE -> {
-                BrowserViewModel.activeInstance?.pauseReading()
+                val fromApp = intent?.getBooleanExtra(EXTRA_FROM_APP, false) ?: false
+                if (!fromApp) {
+                    BrowserViewModel.activeInstance?.pauseReading()
+                }
                 stopSilentAudio()
                 releaseMediaSession()
                 releaseWakeLock()
                 stopForeground(true)
-                stopSelf()
+                stopSelf(startId)
             }
             ACTION_STOP -> {
-                BrowserViewModel.activeInstance?.pauseReading()
+                val fromApp = intent?.getBooleanExtra(EXTRA_FROM_APP, false) ?: false
+                if (!fromApp) {
+                    BrowserViewModel.activeInstance?.pauseReading()
+                }
                 stopSilentAudio()
                 releaseMediaSession()
                 releaseWakeLock()
                 stopForeground(true)
-                stopSelf()
+                stopSelf(startId)
             }
         }
         return START_NOT_STICKY

@@ -87,6 +87,8 @@ fun BrowserScreen(
     var pageLoadProgress by remember { mutableFloatStateOf(0f) }
     var showModeDialog by remember { mutableStateOf(false) }
     var extractedTextForQueue by remember { mutableStateOf("") }
+    var capturedTitleForQueue by remember { mutableStateOf("") }
+    var capturedUrlForQueue by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
 
     // Đồng bộ ô nhập địa chỉ khi URL thay đổi (ví dụ: nhấn link trong WebView)
@@ -298,9 +300,13 @@ fun BrowserScreen(
                                             result.replace("\"", "").replace("\\n", "\n")
                                         }
                                         extractedTextForQueue = cleanText
+                                        capturedTitleForQueue = viewModel.title.value
+                                        capturedUrlForQueue = viewModel.url.value
                                         showModeDialog = true
                                     } else {
                                         extractedTextForQueue = ""
+                                        capturedTitleForQueue = viewModel.title.value
+                                        capturedUrlForQueue = viewModel.url.value
                                         showModeDialog = true
                                     }
                                 }
@@ -327,7 +333,7 @@ fun BrowserScreen(
                         Button(
                             onClick = {
                                 showModeDialog = false
-                                viewModel.translateWebpage(extractedTextForQueue)
+                                viewModel.translateWebpage(extractedTextForQueue, capturedTitleForQueue, capturedUrlForQueue)
                             }
                         ) {
                             Text("Đọc ngay")
@@ -338,7 +344,7 @@ fun BrowserScreen(
                             OutlinedButton(
                                 onClick = {
                                     showModeDialog = false
-                                    viewModel.translateAndAddToQueue(extractedTextForQueue)
+                                    viewModel.translateAndAddToQueue(extractedTextForQueue, capturedTitleForQueue, capturedUrlForQueue)
                                 }
                             ) {
                                 Text("Thêm vào hàng chờ")

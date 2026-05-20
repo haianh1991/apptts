@@ -124,12 +124,12 @@ class TtsManager(private val context: Context) {
 
     fun stop() {
         tts?.stop()
-        TtsService.stop(context)
+        TtsService.stop(context, fromApp = true)
     }
 
     fun shutdown() {
         tts?.shutdown()
         tts = null
-        TtsService.stop(context)
+        TtsService.stop(context, fromApp = true)
     }
 }
