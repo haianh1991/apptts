@@ -7,6 +7,11 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioTrack
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -17,6 +22,8 @@ import com.example.webreader.ui.BrowserViewModel
 class TtsService : Service() {
 
     private var wakeLock: PowerManager.WakeLock? = null
+    private var silentAudioTrack: AudioTrack? = null
+    private var mediaSession: MediaSession? = null
 
     companion object {
         private const val CHANNEL_ID = "tts_service_channel"
@@ -67,15 +74,21 @@ class TtsService : Service() {
                     startForeground(NOTIFICATION_ID, notification)
                 }
                 acquireWakeLock()
+                startSilentAudio()
+                setupMediaSession()
             }
             ACTION_PAUSE -> {
                 BrowserViewModel.activeInstance?.pauseReading()
+                stopSilentAudio()
+                releaseMediaSession()
                 releaseWakeLock()
                 stopForeground(true)
                 stopSelf()
             }
             ACTION_STOP -> {
                 BrowserViewModel.activeInstance?.pauseReading()
+                stopSilentAudio()
+                releaseMediaSession()
                 releaseWakeLock()
                 stopForeground(true)
                 stopSelf()
@@ -108,7 +121,141 @@ class TtsService : Service() {
         }
     }
 
+    private fun startSilentAudio() {
+        try {
+            if (silentAudioTrack == null) {
+                val sampleRate = 8000
+                val numSamples = sampleRate * 1 // 1 second of silence
+                val sizeInBytes = numSamples * 2 // 16-bit PCM = 2 bytes per sample
+                
+                val attributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+                
+                val format = AudioFormat.Builder()
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setSampleRate(sampleRate)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                    .build()
+
+                val track = AudioTrack.Builder()
+                    .setAudioAttributes(attributes)
+                    .setAudioFormat(format)
+                    .setBufferSizeInBytes(sizeInBytes)
+                    .setTransferMode(AudioTrack.MODE_STATIC)
+                    .build()
+                
+                val silentBuffer = ShortArray(numSamples) // filled with zeros
+                track.write(silentBuffer, 0, silentBuffer.size)
+                track.setLoopPoints(0, numSamples, -1) // loop infinitely
+                track.play()
+                
+                silentAudioTrack = track
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("TtsService", "Lỗi khởi tạo âm thanh tĩnh: ${e.message}", e)
+        }
+    }
+
+    private fun stopSilentAudio() {
+        try {
+            silentAudioTrack?.apply {
+                if (playState == AudioTrack.PLAYSTATE_PLAYING) {
+                    stop()
+                }
+                release()
+            }
+            silentAudioTrack = null
+        } catch (e: Exception) {
+            android.util.Log.e("TtsService", "Lỗi dừng âm thanh tĩnh: ${e.message}", e)
+        }
+    }
+
+    private fun setupMediaSession() {
+        try {
+            if (mediaSession == null) {
+                mediaSession = MediaSession(this, "WebReaderMediaSession").apply {
+                    val state = PlaybackState.Builder()
+                        .setActions(
+                            PlaybackState.ACTION_PLAY or
+                            PlaybackState.ACTION_PAUSE or
+                            PlaybackState.ACTION_STOP or
+                            PlaybackState.ACTION_SKIP_TO_NEXT or
+                            PlaybackState.ACTION_SKIP_TO_PREVIOUS
+                        )
+                        .setState(PlaybackState.STATE_PLAYING, 0L, 1.0f)
+                        .build()
+                    setPlaybackState(state)
+                    
+                    setCallback(object : MediaSession.Callback() {
+                        override fun onPlay() {
+                            BrowserViewModel.activeInstance?.resumeReading()
+                            updateMediaSessionState(PlaybackState.STATE_PLAYING)
+                        }
+
+                        override fun onPause() {
+                            BrowserViewModel.activeInstance?.pauseReading()
+                            updateMediaSessionState(PlaybackState.STATE_PAUSED)
+                        }
+
+                        override fun onStop() {
+                            BrowserViewModel.activeInstance?.pauseReading()
+                            updateMediaSessionState(PlaybackState.STATE_STOPPED)
+                        }
+
+                        override fun onSkipToNext() {
+                            BrowserViewModel.activeInstance?.playNext()
+                        }
+
+                        override fun onSkipToPrevious() {
+                            BrowserViewModel.activeInstance?.playPrevious()
+                        }
+                    })
+                    
+                    isActive = true
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("TtsService", "Lỗi thiết lập MediaSession: ${e.message}", e)
+        }
+    }
+
+    private fun updateMediaSessionState(stateInt: Int) {
+        try {
+            mediaSession?.apply {
+                val state = PlaybackState.Builder()
+                    .setActions(
+                        PlaybackState.ACTION_PLAY or
+                        PlaybackState.ACTION_PAUSE or
+                        PlaybackState.ACTION_STOP or
+                        PlaybackState.ACTION_SKIP_TO_NEXT or
+                        PlaybackState.ACTION_SKIP_TO_PREVIOUS
+                    )
+                    .setState(stateInt, 0L, 1.0f)
+                    .build()
+                setPlaybackState(state)
+            }
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
+
+    private fun releaseMediaSession() {
+        try {
+            mediaSession?.apply {
+                isActive = false
+                release()
+            }
+            mediaSession = null
+        } catch (e: Exception) {
+            android.util.Log.e("TtsService", "Lỗi giải phóng MediaSession: ${e.message}", e)
+        }
+    }
+
     override fun onDestroy() {
+        stopSilentAudio()
+        releaseMediaSession()
         releaseWakeLock()
         super.onDestroy()
     }
