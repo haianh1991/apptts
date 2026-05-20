@@ -330,102 +330,34 @@ fun BrowserScreen(
                     FloatingActionButton(
                         onClick = {
                             webViewInstance?.let { webView ->
-                                // Script trích xuất nội dung văn bản chất lượng cao từ DOM (hỗ trợ các trang novel dùng thẻ br phân đoạn)
+                                // Script trích xuất nội dung văn bản thô chất lượng cao (Hybrid Approach)
                                 val jsExtractor = """
                                     (function() {
-                                        // 1. Tìm các thẻ chứa nội dung truyện/bài viết phổ biến
-                                        var selectors = [
-                                            '.readcotent', '#content', '.content', '#readcontent', 
-                                            '.read-content', '.readcontent', '#chapter-content', 
-                                            '#book-content', '.chapter-content', '.article-content', 'article'
+                                        if (!document.body) return "";
+                                        // 1. Nhân bản body để làm sạch mà không ảnh hưởng DOM hiển thị trên màn hình
+                                        var temp = document.body.cloneNode(true);
+
+                                        // 2. Loại bỏ các thẻ rác, quảng cáo, menu điều hướng để tiết kiệm token
+                                        var trashSelectors = [
+                                            'script', 'style', 'iframe', 'noscript', 'header', 'footer', 'nav',
+                                            '.ads', '.advertisement', '#header', '#footer', '.footer', '.header',
+                                            '.sidebar', '#sidebar', '.nav', '.navigation', '.menu', '#menu',
+                                            '.banner', '.popup', '.comment-list', '#comments', '.toolbar-box', '.toolbar'
                                         ];
-                                        var container = null;
-                                        for (var i = 0; i < selectors.length; i++) {
-                                            var el = document.querySelector(selectors[i]);
-                                            if (el && el.innerText.trim().length > 100) {
-                                                container = el;
-                                                break;
-                                            }
-                                        }
-
-                                        // 2. Nếu tìm thấy thẻ chứa nội dung chính
-                                        if (container) {
-                                            // Lấy tiêu đề chương trước
-                                            var titleText = "";
-                                            var h1 = document.querySelector('h1');
-                                            if (h1) {
-                                                titleText = h1.innerText.trim() + "\n\n";
-                                            }
-
-                                            // Nếu thẻ chứa có sử dụng thẻ br để ngắt dòng
-                                            if (container.querySelector('br')) {
-                                                // Nhân bản node để tránh thay đổi DOM gốc
-                                                var temp = container.cloneNode(true);
-                                                
-                                                // Loại bỏ các thẻ script, style, quảng cáo ẩn bên trong nếu có
-                                                var badTags = temp.querySelectorAll('script, style, iframe, .ads, .advertisement');
-                                                badTags.forEach(function(node) { node.remove(); });
-                                                
-                                                // Thay thế các thẻ br bằng một dấu phân tách đặc biệt
-                                                var html = temp.innerHTML;
-                                                // Replace br tags with placeholder
-                                                html = html.replace(/<br\s*\/?>/gi, '___BR_SPLIT___');
-                                                
-                                                var tempDiv = document.createElement('div');
-                                                tempDiv.innerHTML = html;
-                                                var rawText = tempDiv.innerText;
-                                                
-                                                var lines = rawText.split('___BR_SPLIT___');
-                                                var cleanedLines = [];
-                                                lines.forEach(function(line) {
-                                                    var clean = line.replace(/&emsp;/g, '').replace(/&nbsp;/g, ' ').trim();
-                                                    // Bỏ qua dòng quá ngắn hoặc dòng quảng cáo tiêu biểu
-                                                    if (clean.length > 5 && !clean.includes('loadAdv') && !clean.includes('UU看書')) {
-                                                        cleanedLines.push(clean);
-                                                    }
-                                                });
-                                                
-                                                if (cleanedLines.length > 3) {
-                                                    return titleText + cleanedLines.join('\n\n');
-                                                }
-                                            }
-                                            
-                                            // Fallback nếu không có br hoặc xử lý br thất bại: Lấy text của các đoạn bên trong
-                                            var pNodes = container.querySelectorAll('p');
-                                            if (pNodes.length > 3) {
-                                                var pTexts = [];
-                                                pNodes.forEach(function(p) {
-                                                    var t = p.innerText.trim();
-                                                    if (t.length > 5) pTexts.push(t);
-                                                });
-                                                return titleText + pTexts.join('\n\n');
-                                            }
-                                            
-                                            // Fallback cuối cùng của container: lấy innerText thô và lọc dòng trống
-                                            var rawLines = container.innerText.split('\n');
-                                            var cleanRawLines = [];
-                                            rawLines.forEach(function(l) {
-                                                var t = l.trim();
-                                                if (t.length > 5) cleanRawLines.push(t);
-                                            });
-                                            return titleText + cleanRawLines.join('\n\n');
-                                        }
-
-                                        // 3. Fallback nếu không tìm thấy container đặc thù: duyệt tất cả h1, h2, h3, p
-                                        var elements = document.querySelectorAll('h1, h2, h3, p, article');
-                                        var textList = [];
-                                        var seen = new Set();
-                                        elements.forEach(function(el) {
-                                            var text = el.innerText.trim();
-                                            if (text.length > 25 && !seen.has(text)) {
-                                                textList.push(text);
-                                                seen.add(text);
-                                            }
+                                        trashSelectors.forEach(function(sel) {
+                                            var elements = temp.querySelectorAll(sel);
+                                            elements.forEach(function(el) { el.remove(); });
                                         });
-                                        if (textList.length < 3) {
-                                            return document.body.innerText;
+
+                                        // 3. Lấy innerText thô chứa nội dung truyện/bài viết chính và các thông tin liên quan
+                                        var text = temp.innerText.trim();
+                                        
+                                        // 4. Fallback dự phòng nếu text quá ngắn
+                                        if (text.length < 100) {
+                                            text = document.body.innerText.trim();
                                         }
-                                        return textList.join('\n\n');
+                                        
+                                        return text;
                                     })()
                                 """.trimIndent()
 

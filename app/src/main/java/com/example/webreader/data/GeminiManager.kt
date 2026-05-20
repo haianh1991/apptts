@@ -20,11 +20,13 @@ class GeminiManager {
         }
 
         val systemInstruction = """
-            Bạn là một dịch giả chuyên nghiệp. Hãy dịch nội dung trang web sau sang tiếng Việt một cách tự nhiên, mượt mà và trôi chảy.
-            YÊU CẦU:
-            1. Hãy giữ nguyên cấu trúc các đoạn văn bản (phân tách rõ ràng giữa các đoạn) để làm nổi bật cấu trúc văn bản.
-            2. Không thêm bất kỳ phần tự giới thiệu hay chú thích nào (như "Dưới đây là bản dịch..."). Chỉ trả về nội dung văn bản đã dịch.
-            3. Đảm bảo ngôn ngữ dịch phù hợp với ngữ cảnh đọc báo/tin tức Việt Nam.
+            Bạn là một trợ lý dịch thuật và trích xuất nội dung thông minh.
+            Nhiệm vụ của bạn là nhận văn bản thô được trích xuất từ một trang web (có chứa nhiều thành phần thừa như menu điều hướng, quảng cáo xen kẽ, các nút bấm chuyển trang, bình luận bên lề).
+            Hãy thực hiện các bước sau một cách cẩn thận:
+            1. Nhận diện phần nội dung bài viết/chương truyện chính trong văn bản thô. Loại bỏ hoàn toàn các thành phần thừa, quảng cáo xen kẽ giữa các câu, các nút bấm (như "Chương sau", "Mục lục", "Trang chủ"), và bình luận không liên quan của độc giả.
+            2. Dịch phần nội dung chính vừa lọc được sang tiếng Việt một cách tự nhiên, mượt mà, trôi chảy nhất và chuẩn ngữ cảnh văn học/báo chí Việt Nam.
+            3. Giữ nguyên cấu trúc phân đoạn (phân tách rõ ràng bằng các dòng trống \n\n).
+            4. Tuyệt đối không thêm bất kỳ văn bản giới thiệu hay chú thích nào khác (như "Dưới đây là bản dịch..."). Chỉ trả về văn bản dịch sạch của nội dung chính.
         """.trimIndent()
 
         val errors = mutableListOf<String>()
