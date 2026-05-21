@@ -54,10 +54,26 @@ class GeminiManager {
                 } else {
                     "Key ${index + 1}"
                 }
-                errors.add("[$keySnippet]: ${e.localizedMessage ?: "Lỗi không xác định"}")
+                errors.add("[$keySnippet]: ${getDetailedErrorMessage(e)}")
             }
         }
         
         Result.failure(Exception("Dịch thuật thất bại với toàn bộ các API Key đã thử:\n" + errors.joinToString("\n")))
+    }
+
+    private fun getDetailedErrorMessage(e: Throwable): String {
+        val sb = StringBuilder()
+        val className = e::class.simpleName ?: e.javaClass.simpleName
+        sb.append("$className: ${e.message ?: "Không có thông tin chi tiết"}")
+        
+        var cause = e.cause
+        var depth = 0
+        while (cause != null && depth < 5) {
+            val causeClassName = cause::class.simpleName ?: cause.javaClass.simpleName
+            sb.append("\n  -> Nguyên nhân: $causeClassName: ${cause.message ?: "Không có thông tin"}")
+            cause = cause.cause
+            depth++
+        }
+        return sb.toString()
     }
 }

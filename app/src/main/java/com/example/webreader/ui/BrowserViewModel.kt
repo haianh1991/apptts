@@ -235,7 +235,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     _errorMessage.value = "Bản dịch rỗng hoặc không phân tích được đoạn văn."
                 }
             }.onFailure { exception ->
-                _errorMessage.value = "Lỗi dịch thuật: ${exception.localizedMessage ?: "Không xác định"}"
+                _errorMessage.value = "Lỗi dịch thuật:\n${exception.message ?: exception.localizedMessage ?: "Không xác định"}"
             }
         }
     }
@@ -305,7 +305,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             }.onFailure { exception ->
                 android.widget.Toast.makeText(
                     getApplication(),
-                    "Lỗi dịch thuật bài viết \"$title\": ${exception.localizedMessage ?: "Không xác định"}",
+                    "Lỗi dịch thuật bài viết \"$title\":\n${exception.message ?: exception.localizedMessage ?: "Không xác định"}",
                     android.widget.Toast.LENGTH_LONG
                 ).show()
             }
