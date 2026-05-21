@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,7 +29,16 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.lazy.LazyListItemInfo
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.zIndex
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -168,7 +178,7 @@ fun ReaderSheet(
                     )
                 }
 
-                // Tab Hàng chờ đọc
+                // Tab Đã dịch
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -181,7 +191,7 @@ fun ReaderSheet(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Hàng chờ (${queue.size})",
+                        text = "Đã dịch (${queue.size})",
                         color = if (activeTab == 1) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.SemiBold,
                         style = MaterialTheme.typography.bodyMedium
@@ -356,6 +366,23 @@ fun ReaderSheet(
                         }
                     }
                     1 -> {
+                        val activeTranslations by viewModel.activeTranslations.collectAsState()
+                        val translatingItems = activeTranslations.filter { it.status == TranslationStatus.TRANSLATING }
+                        val failedItems = activeTranslations.filter { it.status == TranslationStatus.FAILED }
+                        
+                        val topItemsCount = (if (translatingItems.isNotEmpty()) 1 + translatingItems.size else 0) +
+                                           (if (failedItems.isNotEmpty()) 1 + failedItems.size else 0) +
+                                           (if (queue.isNotEmpty()) 1 else 0)
+
+                        val dragDropListState = rememberLazyListState()
+                        val dragDropState = rememberDragDropState(dragDropListState) { fromIndex, toIndex ->
+                            val queueStartIndex = topItemsCount
+                            val queueEndIndex = topItemsCount + queue.size
+                            if (fromIndex in queueStartIndex until queueEndIndex && toIndex in queueStartIndex until queueEndIndex) {
+                                viewModel.reorderQueue(fromIndex - queueStartIndex, toIndex - queueStartIndex)
+                            }
+                        }
+
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -373,7 +400,7 @@ fun ReaderSheet(
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
-                                if (queue.isNotEmpty()) {
+                                if (queue.isNotEmpty() || activeTranslations.isNotEmpty()) {
                                     TextButton(onClick = { viewModel.clearQueue() }) {
                                         Text(
                                             text = "Xóa tất cả",
@@ -383,7 +410,7 @@ fun ReaderSheet(
                                 }
                             }
 
-                            if (queue.isEmpty()) {
+                            if (queue.isEmpty() && activeTranslations.isEmpty()) {
                                 Box(
                                     modifier = Modifier.weight(1f).fillMaxWidth(),
                                     contentAlignment = Alignment.Center
@@ -394,7 +421,7 @@ fun ReaderSheet(
                                         modifier = Modifier.padding(16.dp)
                                     ) {
                                         Text(
-                                            text = "Hàng chờ trống",
+                                            text = "Danh sách trống",
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.outline
                                         )
@@ -409,82 +436,219 @@ fun ReaderSheet(
                                 }
                             } else {
                                 LazyColumn(
-                                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                                    state = dragDropListState,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .dragContainer(dragDropState),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    itemsIndexed(queue) { index, item ->
-                                        val isCurrent = index == currentQueueItemIndex
-                                        val containerColor = if (isCurrent) {
-                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                                        } else {
-                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                                    // SECTION 1: Translating Items
+                                    if (translatingItems.isNotEmpty()) {
+                                        item {
+                                            Text(
+                                                text = "Đang dịch (${translatingItems.size})",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                                            )
                                         }
-                                        val borderColor = if (isCurrent) {
-                                            BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                                        } else {
-                                            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                                        }
-
-                                        Card(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            colors = CardDefaults.cardColors(containerColor = containerColor),
-                                            border = borderColor
-                                        ) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(12.dp),
-                                                verticalAlignment = Alignment.CenterVertically
+                                        items(translatingItems.size, key = { index -> "translating_${translatingItems[index].id}" }) { index ->
+                                            val item = translatingItems[index]
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                                                ),
+                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
                                             ) {
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(
-                                                        text = item.title,
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = FontWeight.Bold,
-                                                        maxLines = 2
-                                                    )
-                                                    Spacer(modifier = Modifier.height(4.dp))
-                                                    Text(
-                                                        text = item.url,
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.outline,
-                                                        maxLines = 1
-                                                    )
-                                                    Spacer(modifier = Modifier.height(2.dp))
-                                                    Text(
-                                                        text = "${item.paragraphs.size} đoạn văn",
-                                                        style = MaterialTheme.typography.bodySmall,
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(12.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(20.dp),
+                                                        strokeWidth = 2.dp,
                                                         color = MaterialTheme.colorScheme.primary
                                                     )
-                                                }
-
-                                                Spacer(modifier = Modifier.width(8.dp))
-
-                                                IconButton(
-                                                    onClick = {
-                                                        if (isCurrent && isPlaying) {
-                                                            viewModel.pauseReading()
-                                                        } else {
-                                                            viewModel.playQueueItem(index)
-                                                            activeTab = 0
-                                                        }
+                                                    Spacer(modifier = Modifier.width(12.dp))
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = item.title,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            fontWeight = FontWeight.Bold,
+                                                            maxLines = 1
+                                                        )
+                                                        Text(
+                                                            text = "Đang dịch...",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.outline
+                                                        )
                                                     }
-                                                ) {
-                                                    Icon(
-                                                        imageVector = if (isCurrent && isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                                        contentDescription = "Phát",
-                                                        tint = MaterialTheme.colorScheme.primary
-                                                    )
+                                                    IconButton(onClick = { viewModel.removeActiveTranslation(item.id) }) {
+                                                        Icon(
+                                                            imageVector = Icons.Filled.Close,
+                                                            contentDescription = "Hủy",
+                                                            tint = MaterialTheme.colorScheme.outline
+                                                        )
+                                                    }
                                                 }
+                                            }
+                                        }
+                                    }
 
-                                                IconButton(
-                                                    onClick = { viewModel.removeQueueItem(index) }
+                                    // SECTION 2: Failed Items
+                                    if (failedItems.isNotEmpty()) {
+                                        item {
+                                            Text(
+                                                text = "Dịch lỗi (${failedItems.size})",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = MaterialTheme.colorScheme.error,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                                            )
+                                        }
+                                        items(failedItems.size, key = { index -> "failed_${failedItems[index].id}" }) { index ->
+                                            val item = failedItems[index]
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
+                                                ),
+                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f))
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(12.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
                                                 ) {
-                                                    Icon(
-                                                        imageVector = Icons.Filled.Close,
-                                                        contentDescription = "Xóa",
-                                                        tint = MaterialTheme.colorScheme.error
-                                                    )
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = item.title,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            fontWeight = FontWeight.Bold,
+                                                            maxLines = 1
+                                                        )
+                                                        Text(
+                                                            text = item.errorMessage ?: "Lỗi dịch thuật",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.error,
+                                                            maxLines = 2
+                                                        )
+                                                    }
+                                                    IconButton(onClick = { viewModel.retryTranslation(item) }) {
+                                                        Icon(
+                                                            imageVector = Icons.Filled.Refresh,
+                                                            contentDescription = "Thử lại",
+                                                            tint = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
+                                                    IconButton(onClick = { viewModel.removeActiveTranslation(item.id) }) {
+                                                        Icon(
+                                                            imageVector = Icons.Filled.Close,
+                                                            contentDescription = "Xóa",
+                                                            tint = MaterialTheme.colorScheme.error
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // SECTION 3: Queue Items (Draggable)
+                                    if (queue.isNotEmpty()) {
+                                        item {
+                                            Text(
+                                                text = "Đã dịch xong (${queue.size})",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = MaterialTheme.colorScheme.secondary,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                                            )
+                                        }
+                                        
+                                        items(queue.size, key = { index -> queue[index].id }) { index ->
+                                            val item = queue[index]
+                                            val globalIndex = topItemsCount + index
+                                            val isCurrent = index == currentQueueItemIndex
+                                            val containerColor = if (isCurrent) {
+                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                            } else {
+                                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                                            }
+                                            val borderColor = if (isCurrent) {
+                                                BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                                            } else {
+                                                BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                            }
+
+                                            Card(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .dragItem(globalIndex, dragDropState),
+                                                colors = CardDefaults.cardColors(containerColor = containerColor),
+                                                border = borderColor
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(12.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = item.title,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            fontWeight = FontWeight.Bold,
+                                                            maxLines = 2
+                                                        )
+                                                        Spacer(modifier = Modifier.height(4.dp))
+                                                        Text(
+                                                            text = item.url,
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.outline,
+                                                            maxLines = 1
+                                                        )
+                                                        Spacer(modifier = Modifier.height(2.dp))
+                                                        Text(
+                                                            text = "${item.paragraphs.size} đoạn văn",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
+
+                                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                                    IconButton(
+                                                        onClick = {
+                                                            if (isCurrent && isPlaying) {
+                                                                viewModel.pauseReading()
+                                                            } else {
+                                                                viewModel.playQueueItem(index)
+                                                                activeTab = 0
+                                                            }
+                                                        }
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = if (isCurrent && isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                                            contentDescription = "Phát",
+                                                            tint = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
+
+                                                    IconButton(
+                                                        onClick = { viewModel.removeQueueItem(index) }
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Filled.Close,
+                                                            contentDescription = "Xóa",
+                                                            tint = MaterialTheme.colorScheme.error
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -685,4 +849,110 @@ fun ReaderSheet(
             }
         }
     }
+}
+
+// Drag and drop helper state & modifiers for LazyColumn
+class DragDropState(
+    val lazyListState: LazyListState,
+    private val onMove: (Int, Int) -> Unit
+) {
+    var draggedDistance by mutableFloatStateOf(0f)
+        private set
+
+    var initiallyDraggedElement by mutableStateOf<LazyListItemInfo?>(null)
+        private set
+
+    var currentDraggedElement by mutableStateOf<LazyListItemInfo?>(null)
+        private set
+
+    val draggedIndex: Int?
+        get() = initiallyDraggedElement?.index
+
+    fun onDragStart(offset: Offset) {
+        lazyListState.layoutInfo.visibleItemsInfo
+            .firstOrNull { item ->
+                val y = offset.y.toInt()
+                y in item.offset..(item.offset + item.size)
+            }
+            .also {
+                initiallyDraggedElement = it
+                currentDraggedElement = it
+            }
+    }
+
+    fun onDragInterrupted() {
+        initiallyDraggedElement = null
+        currentDraggedElement = null
+        draggedDistance = 0f
+    }
+
+    fun onDrag(offset: Offset) {
+        draggedDistance += offset.y
+        
+        val initiallyDragged = initiallyDraggedElement ?: return
+        val currentStart = initiallyDragged.offset + draggedDistance
+        val currentEnd = initiallyDragged.offset + initiallyDragged.size + draggedDistance
+        
+        val targetElement = lazyListState.layoutInfo.visibleItemsInfo
+            .firstOrNull { item ->
+                val itemStart = item.offset
+                val itemEnd = item.offset + item.size
+                if (draggedDistance > 0) {
+                    currentEnd > itemStart + item.size / 2 && initiallyDragged.index < item.index
+                } else {
+                    currentStart < itemEnd - item.size / 2 && initiallyDragged.index > item.index
+                }
+            }
+            
+        if (targetElement != null) {
+            val fromIndex = initiallyDragged.index
+            val toIndex = targetElement.index
+            onMove(fromIndex, toIndex)
+            initiallyDraggedElement = targetElement
+            draggedDistance = currentStart - targetElement.offset
+        }
+    }
+}
+
+@Composable
+fun rememberDragDropState(
+    lazyListState: LazyListState,
+    onMove: (Int, Int) -> Unit
+): DragDropState {
+    return remember(lazyListState, onMove) {
+        DragDropState(lazyListState, onMove)
+    }
+}
+
+fun Modifier.dragContainer(
+    dragDropState: DragDropState,
+    enabled: Boolean = true
+): Modifier {
+    if (!enabled) return this
+    return this.pointerInput(dragDropState) {
+        detectDragGesturesAfterLongPress(
+            onDragStart = { offset -> dragDropState.onDragStart(offset) },
+            onDragEnd = { dragDropState.onDragInterrupted() },
+            onDragCancel = { dragDropState.onDragInterrupted() },
+            onDrag = { change, dragAmount ->
+                change.consume()
+                dragDropState.onDrag(dragAmount)
+            }
+        )
+    }
+}
+
+fun Modifier.dragItem(
+    itemIndex: Int,
+    dragDropState: DragDropState,
+    enabled: Boolean = true
+): Modifier {
+    if (!enabled) return this
+    val draggedIndex = dragDropState.draggedIndex
+    val isDragging = draggedIndex == itemIndex
+    return this
+        .zIndex(if (isDragging) 1f else 0f)
+        .graphicsLayer {
+            translationY = if (isDragging) dragDropState.draggedDistance else 0f
+        }
 }

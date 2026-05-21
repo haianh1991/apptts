@@ -33,6 +33,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private val _queue = MutableStateFlow<List<QueueItem>>(emptyList())
     val queue: StateFlow<List<QueueItem>> = _queue
 
+    private val _activeTranslations = MutableStateFlow<List<ActiveTranslation>>(emptyList())
+    val activeTranslations: StateFlow<List<ActiveTranslation>> = _activeTranslations
+
     private val _currentQueueItemIndex = MutableStateFlow<Int>(-1)
     val currentQueueItemIndex: StateFlow<Int> = _currentQueueItemIndex
 
@@ -254,6 +257,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             android.widget.Toast.LENGTH_SHORT
         ).show()
 
+        val job = ActiveTranslation(
+            title = title,
+            url = url,
+            text = text,
+            status = TranslationStatus.TRANSLATING
+        )
+        _activeTranslations.value = _activeTranslations.value + job
+
         viewModelScope.launch {
             val result = geminiManager.translateToVietnamese(
                 text = text,
@@ -266,6 +277,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
                 
+                _activeTranslations.value = _activeTranslations.value.filter { it.id != job.id }
+
                 if (rawParagraphs.isNotEmpty()) {
                     val newItem = QueueItem(
                         id = java.util.UUID.randomUUID().toString(),
@@ -296,6 +309,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         android.widget.Toast.LENGTH_SHORT
                     ).show()
                 } else {
+                    _activeTranslations.value = _activeTranslations.value.map {
+                        if (it.id == job.id) it.copy(status = TranslationStatus.FAILED, errorMessage = "Không phân tích được đoạn văn") else it
+                    }
                     android.widget.Toast.makeText(
                         getApplication(),
                         "Lỗi: Không phân tích được đoạn văn cho bài viết: $title",
@@ -303,6 +319,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     ).show()
                 }
             }.onFailure { exception ->
+                _activeTranslations.value = _activeTranslations.value.map {
+                    if (it.id == job.id) it.copy(
+                        status = TranslationStatus.FAILED,
+                        errorMessage = exception.message ?: exception.localizedMessage ?: "Lỗi không xác định"
+                    ) else it
+                }
                 android.widget.Toast.makeText(
                     getApplication(),
                     "Lỗi dịch thuật bài viết \"$title\":\n${exception.message ?: exception.localizedMessage ?: "Không xác định"}",
@@ -364,7 +386,97 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _currentParagraphIndex.value = -1
         _currentQueueItemIndex.value = -1
         _queue.value = emptyList()
+        _activeTranslations.value = emptyList()
         queueRepository.clearQueue()
+    }
+
+    fun retryTranslation(job: ActiveTranslation) {
+        _activeTranslations.value = _activeTranslations.value.map {
+            if (it.id == job.id) it.copy(status = TranslationStatus.TRANSLATING, errorMessage = null) else it
+        }
+        
+        viewModelScope.launch {
+            val result = geminiManager.translateToVietnamese(
+                text = job.text,
+                apiKeys = settings.geminiApiKeys,
+                modelName = settings.geminiModel
+            )
+            
+            result.onSuccess { translatedText ->
+                val rawParagraphs = translatedText.split("\n\n")
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                
+                if (rawParagraphs.isNotEmpty()) {
+                    _activeTranslations.value = _activeTranslations.value.filter { it.id != job.id }
+                    
+                    val newItem = QueueItem(
+                        id = java.util.UUID.randomUUID().toString(),
+                        title = job.title,
+                        url = job.url,
+                        paragraphs = rawParagraphs
+                    )
+                    val updatedQueue = _queue.value.toMutableList().apply { add(newItem) }
+                    _queue.value = updatedQueue
+                    queueRepository.saveQueue(updatedQueue)
+                    
+                    if (_currentQueueItemIndex.value == -1 && _paragraphs.value.isEmpty()) {
+                        val qList = _queue.value
+                        if (updatedQueue.lastIndex in qList.indices) {
+                            val item = qList[updatedQueue.lastIndex]
+                            _currentQueueItemIndex.value = updatedQueue.lastIndex
+                            _paragraphs.value = item.paragraphs
+                            _title.value = item.title
+                            _currentParagraphIndex.value = -1
+                            _isPlaying.value = false
+                        }
+                    }
+                    
+                    android.widget.Toast.makeText(
+                        getApplication(),
+                        "Đã thêm vào hàng chờ: ${job.title}",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    _activeTranslations.value = _activeTranslations.value.map {
+                        if (it.id == job.id) it.copy(status = TranslationStatus.FAILED, errorMessage = "Không phân tích được đoạn văn") else it
+                    }
+                }
+            }.onFailure { exception ->
+                _activeTranslations.value = _activeTranslations.value.map {
+                    if (it.id == job.id) it.copy(
+                        status = TranslationStatus.FAILED,
+                        errorMessage = exception.message ?: exception.localizedMessage ?: "Lỗi không xác định"
+                    ) else it
+                }
+            }
+        }
+    }
+
+    fun removeActiveTranslation(jobId: String) {
+        _activeTranslations.value = _activeTranslations.value.filter { it.id != jobId }
+    }
+
+    fun reorderQueue(fromIndex: Int, toIndex: Int) {
+        val currentList = _queue.value.toMutableList()
+        if (fromIndex in currentList.indices && toIndex in currentList.indices) {
+            val currentIdx = _currentQueueItemIndex.value
+            val itemToMove = currentList.removeAt(fromIndex)
+            currentList.add(toIndex, itemToMove)
+            
+            if (currentIdx != -1) {
+                if (currentIdx == fromIndex) {
+                    _currentQueueItemIndex.value = toIndex
+                } else if (fromIndex < currentIdx && toIndex >= currentIdx) {
+                    _currentQueueItemIndex.value = currentIdx - 1
+                } else if (fromIndex > currentIdx && toIndex <= currentIdx) {
+                    _currentQueueItemIndex.value = currentIdx + 1
+                }
+            }
+            
+            _queue.value = currentList
+            queueRepository.saveQueue(currentList)
+        }
     }
 
     fun setUrl(newUrl: String) {
@@ -456,3 +568,17 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         ttsManager.shutdown()
     }
 }
+
+enum class TranslationStatus {
+    TRANSLATING,
+    FAILED
+}
+
+data class ActiveTranslation(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val title: String,
+    val url: String,
+    val text: String,
+    val status: TranslationStatus,
+    val errorMessage: String? = null
+)
