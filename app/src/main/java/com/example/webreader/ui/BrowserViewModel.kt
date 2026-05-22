@@ -39,6 +39,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private val _translationLogs = MutableStateFlow<List<TransactionLog>>(emptyList())
     val translationLogs: StateFlow<List<TransactionLog>> = _translationLogs
 
+    private val _foregroundTranslationStep = MutableStateFlow("")
+    val foregroundTranslationStep: StateFlow<String> = _foregroundTranslationStep
+
     private val _activeTranslations = MutableStateFlow<List<ActiveTranslation>>(emptyList())
     val activeTranslations: StateFlow<List<ActiveTranslation>> = _activeTranslations
 
@@ -240,13 +243,17 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             _errorMessage.value = null
             _paragraphs.value = emptyList()
             _currentParagraphIndex.value = -1
+            _foregroundTranslationStep.value = "Bắt đầu khởi chạy..."
 
             val logSteps = mutableListOf<String>()
             val result = geminiManager.translateToVietnamese(
                 text = text,
                 apiKeys = settings.geminiApiKeys,
                 modelName = settings.geminiModel,
-                logSteps = logSteps
+                logSteps = logSteps,
+                onStepAdded = { step ->
+                    _foregroundTranslationStep.value = step
+                }
             )
 
             _isTranslating.value = false
@@ -343,7 +350,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 text = text,
                 apiKeys = settings.geminiApiKeys,
                 modelName = settings.geminiModel,
-                logSteps = logSteps
+                logSteps = logSteps,
+                onStepAdded = { step ->
+                    _activeTranslations.value = _activeTranslations.value.map {
+                        if (it.id == job.id) it.copy(currentStep = step) else it
+                    }
+                }
             )
 
             result.onSuccess { translatedText ->
@@ -542,7 +554,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 text = job.text,
                 apiKeys = settings.geminiApiKeys,
                 modelName = settings.geminiModel,
-                logSteps = logSteps
+                logSteps = logSteps,
+                onStepAdded = { step ->
+                    _activeTranslations.value = _activeTranslations.value.map {
+                        if (it.id == job.id) it.copy(currentStep = step) else it
+                    }
+                }
             )
             
             result.onSuccess { translatedText ->
@@ -770,5 +787,6 @@ data class ActiveTranslation(
     val url: String,
     val text: String,
     val status: TranslationStatus,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val currentStep: String? = null
 )

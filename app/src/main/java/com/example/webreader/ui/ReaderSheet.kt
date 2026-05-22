@@ -75,6 +75,7 @@ fun ReaderSheet(
     modifier: Modifier = Modifier
 ) {
     val isTranslating by viewModel.isTranslating.collectAsState()
+    val foregroundTranslationStep by viewModel.foregroundTranslationStep.collectAsState()
     val paragraphs by viewModel.paragraphs.collectAsState()
     val currentIndex by viewModel.currentParagraphIndex.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
@@ -244,6 +245,17 @@ fun ReaderSheet(
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Medium
                                     )
+                                    if (foregroundTranslationStep.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = foregroundTranslationStep,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.SemiBold,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.padding(horizontal = 24.dp)
+                                        )
+                                    }
                                     Text(
                                         text = "Quá trình này có thể mất vài giây tùy thuộc vào độ dài trang.",
                                         style = MaterialTheme.typography.bodySmall,
@@ -483,9 +495,12 @@ fun ReaderSheet(
                                                             maxLines = 1
                                                         )
                                                         Text(
-                                                            text = "Đang dịch...",
+                                                            text = item.currentStep ?: "Đang chuẩn bị dịch...",
                                                             style = MaterialTheme.typography.bodySmall,
-                                                            color = MaterialTheme.colorScheme.outline
+                                                            color = MaterialTheme.colorScheme.primary,
+                                                            fontWeight = FontWeight.Medium,
+                                                            maxLines = 2,
+                                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                                         )
                                                     }
                                                     IconButton(onClick = { viewModel.removeActiveTranslation(item.id) }) {
