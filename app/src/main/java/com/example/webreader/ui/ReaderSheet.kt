@@ -65,6 +65,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.Slider
+import kotlin.math.roundToInt
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -125,6 +127,19 @@ fun ReaderSheet(
         if (currentIndex in paragraphs.indices) {
             scope.launch {
                 listState.animateScrollToItem(currentIndex)
+            }
+        }
+    }
+
+    var sliderPosition by remember { mutableFloatStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
+
+    // Đồng bộ vị trí slider với đoạn đang đọc khi không kéo
+    LaunchedEffect(currentIndex, paragraphs.size) {
+        if (!isDragging) {
+            sliderPosition = when {
+                currentIndex >= 0 -> currentIndex.toFloat().coerceIn(0f, maxOf(0f, (paragraphs.size - 1).toFloat()))
+                else -> 0f
             }
         }
     }
@@ -977,61 +992,113 @@ fun ReaderSheet(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
                     )
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceAround,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Nút lùi lại đoạn trước
-                        IconButton(
-                            onClick = { viewModel.playPrevious() },
-                            enabled = currentIndex > 0
+                        // Thanh Timeline (Progress Bar)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.FastRewind,
-                                contentDescription = appStrings.ttsRewind,
-                                modifier = Modifier.size(32.dp)
+                            val currentText = when {
+                                currentIndex >= 0 -> "${currentIndex + 1}"
+                                currentIndex == -2 -> "Tiêu đề"
+                                else -> "0"
+                            }
+                            Text(
+                                text = currentText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.width(48.dp),
+                                textAlign = TextAlign.Start
+                            )
+
+                            Slider(
+                                value = sliderPosition.coerceIn(0f, maxOf(1f, (paragraphs.size - 1).toFloat())),
+                                onValueChange = {
+                                    isDragging = true
+                                    sliderPosition = it
+                                },
+                                onValueChangeFinished = {
+                                    isDragging = false
+                                    val targetIndex = sliderPosition.roundToInt().coerceIn(0, paragraphs.size - 1)
+                                    viewModel.playParagraph(targetIndex)
+                                },
+                                valueRange = 0f..maxOf(1f, (paragraphs.size - 1).toFloat()),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(32.dp)
+                            )
+
+                            Text(
+                                text = "${paragraphs.size}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.width(48.dp),
+                                textAlign = TextAlign.End
                             )
                         }
 
-                        // Nút Phát / Tạm dừng
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(RoundedCornerShape(28.dp))
-                                .clickable {
-                                    if (isPlaying) viewModel.pauseReading() else viewModel.resumeReading()
-                                }
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // Hàng nút điều khiển thu nhỏ
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceAround,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(28.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.fillMaxSize()
+                            // Nút lùi lại đoạn trước
+                            IconButton(
+                                onClick = { viewModel.playPrevious() },
+                                enabled = currentIndex > 0
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                        contentDescription = if (isPlaying) appStrings.ttsPause else appStrings.ttsPlay,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(36.dp)
-                                    )
+                                Icon(
+                                    imageVector = Icons.Filled.FastRewind,
+                                    contentDescription = appStrings.ttsRewind,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+
+                            // Nút Phát / Tạm dừng
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .clickable {
+                                        if (isPlaying) viewModel.pauseReading() else viewModel.resumeReading()
+                                    }
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(24.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                            contentDescription = if (isPlaying) appStrings.ttsPause else appStrings.ttsPlay,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        // Nút tiến tới đoạn tiếp theo
-                        IconButton(
-                            onClick = { viewModel.playNext() },
-                            enabled = currentIndex < paragraphs.size - 1
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.FastForward,
-                                contentDescription = appStrings.ttsForward,
-                                modifier = Modifier.size(32.dp)
-                            )
+                            // Nút tiến tới đoạn tiếp theo
+                            IconButton(
+                                onClick = { viewModel.playNext() },
+                                enabled = currentIndex < paragraphs.size - 1
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.FastForward,
+                                    contentDescription = appStrings.ttsForward,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         }
                     }
                 }
