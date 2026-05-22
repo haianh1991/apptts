@@ -31,10 +31,10 @@ class UpdateManager(private val context: Context) {
             "1.0"
         }
 
-    suspend fun checkUpdate(configUrl: String): Result<AppUpdateInfo> = withContext(Dispatchers.IO) {
+    private fun fetchUrl(urlStr: String): Result<AppUpdateInfo> {
         var connection: HttpURLConnection? = null
-        try {
-            val url = URL(configUrl)
+        return try {
+            val url = URL(urlStr)
             connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
             connection.connectTimeout = 8000
@@ -68,6 +68,24 @@ class UpdateManager(private val context: Context) {
         } finally {
             connection?.disconnect()
         }
+    }
+
+    suspend fun checkUpdate(configUrl: String): Result<AppUpdateInfo> = withContext(Dispatchers.IO) {
+        val primaryResult = fetchUrl(configUrl)
+        if (primaryResult.isSuccess) {
+            return@withContext primaryResult
+        }
+        
+        // Nếu thất bại và URL là github raw mặc định, thử fallback qua jsDelivr CDN
+        if (configUrl == "https://raw.githubusercontent.com/haianh1991/apptts/main/version.json") {
+            val fallbackUrl = "https://cdn.jsdelivr.net/gh/haianh1991/apptts@main/version.json"
+            val fallbackResult = fetchUrl(fallbackUrl)
+            if (fallbackResult.isSuccess) {
+                return@withContext fallbackResult
+            }
+        }
+        
+        primaryResult
     }
 }
 
