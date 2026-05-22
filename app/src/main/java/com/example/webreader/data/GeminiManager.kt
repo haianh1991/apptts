@@ -53,6 +53,7 @@ class GeminiManager {
         targetLang: String = "Tiếng Việt",
         customInstructions: String = "",
         logSteps: MutableList<String>,
+        title: String? = null,
         onStepAdded: ((String) -> Unit)? = null,
         onContentUpdated: ((String) -> Unit)? = null
     ): Result<String> = withContext(Dispatchers.IO) {
@@ -78,15 +79,28 @@ class GeminiManager {
         addStep("Sử dụng mô hình AI: $modelName")
 
         val srcLangText = if (sourceLang.equals("Auto", ignoreCase = true)) "tự động phát hiện" else sourceLang
-        val systemInstruction = """
-            Bạn là một trợ lý dịch thuật và trích xuất nội dung thông minh.
-            Nhiệm vụ của bạn là nhận văn bản thô được trích xuất từ một trang web (có chứa nhiều thành phần thừa như menu điều hướng, quảng cáo xen kẽ, các nút bấm chuyển trang, bình luận bên lề).
-            Hãy thực hiện các bước sau một cách cẩn thận:
-            1. Nhận diện phần nội dung bài viết/chương truyện chính trong văn bản thô. Loại bỏ hoàn toàn các thành phần thừa, quảng cáo xen kẽ giữa các câu, các nút bấm (như "Chương sau", "Mục lục", "Trang chủ"), và bình luận không liên quan của độc giả.
-            2. Dịch phần nội dung chính vừa lọc được từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, mượt mà, trôi chảy nhất và chuẩn ngữ cảnh văn học/báo chí của ngôn ngữ đích.${if (customInstructions.isNotBlank()) " $customInstructions" else ""}
-            3. Giữ nguyên cấu trúc phân đoạn (phân tách rõ ràng bằng các dòng trống \n\n).
-            4. Tuyệt đối không thêm bất kỳ văn bản giới thiệu hay chú thích nào khác (như "Dưới đây là văn bản dịch..."). Chỉ trả về văn bản dịch sạch của nội dung chính.
-        """.trimIndent()
+        val systemInstructionWithTitle = """
+                Bạn là một trợ lý dịch thuật và trích xuất nội dung thông minh.
+                Nhiệm vụ của bạn là nhận tiêu đề gốc và văn bản thô được trích xuất từ một trang web (có chứa nhiều thành phần thừa như menu điều hướng, quảng cáo xen kẽ, các nút bấm chuyển trang, bình luận bên lề).
+                Hãy thực hiện các bước sau một cách cẩn thận:
+                1. Dịch tiêu đề gốc từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang) một cách tự nhiên.
+                2. Trả về tiêu đề dịch ở dòng đầu tiên dưới định dạng chính xác sau đây:
+                   Title: [Tiêu đề đã dịch]
+                3. Nhận diện phần nội dung bài viết/chương truyện chính trong văn bản thô. Loại bỏ hoàn toàn các thành phần thừa, quảng cáo xen kẽ giữa các câu, các nút bấm (như "Chương sau", "Mục lục", "Trang chủ"), và bình luận không liên quan của độc giả.
+                4. Dịch phần nội dung chính vừa lọc được từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, mượt mà, trôi chảy nhất và chuẩn ngữ cảnh văn học/báo chí của ngôn ngữ đích.${if (customInstructions.isNotBlank()) " $customInstructions" else ""}
+                5. Giữ nguyên cấu trúc phân đoạn (phân tách rõ ràng bằng các dòng trống \n\n).
+                6. Trả về nội dung dịch bên dưới tiêu đề dịch, cách nhau bởi hai dấu xuống dòng (\n\n). Tuyệt đối không thêm bất kỳ văn bản giới thiệu hay chú thích nào khác (như "Dưới đây là văn bản dịch..."). Chỉ trả về tiêu đề dịch định dạng Title: ... và văn bản dịch sạch của nội dung chính.
+            """.trimIndent()
+
+        val systemInstructionStandard = """
+                Bạn là một trợ lý dịch thuật và trích xuất nội dung thông minh.
+                Nhiệm vụ của bạn là nhận văn bản thô được trích xuất từ một trang web (có chứa nhiều thành phần thừa như menu điều hướng, quảng cáo xen kẽ, các nút bấm chuyển trang, bình luận bên lề).
+                Hãy thực hiện các bước sau một cách cẩn thận:
+                1. Nhận diện phần nội dung bài viết/chương truyện chính trong văn bản thô. Loại bỏ hoàn toàn các thành phần thừa, quảng cáo xen kẽ giữa các câu, các nút bấm (như "Chương sau", "Mục lục", "Trang chủ"), và bình luận không liên quan của độc giả.
+                2. Dịch phần nội dung chính vừa lọc được từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, mượt mà, trôi chảy nhất và chuẩn ngữ cảnh văn học/báo chí của ngôn ngữ đích.${if (customInstructions.isNotBlank()) " $customInstructions" else ""}
+                3. Giữ nguyên cấu trúc phân đoạn (phân tách rõ ràng bằng các dòng trống \n\n).
+                4. Tuyệt đối không thêm bất kỳ văn bản giới thiệu hay chú thích nào khác (như "Dưới đây là văn bản dịch..."). Chỉ trả về văn bản dịch sạch của nội dung chính.
+            """.trimIndent()
 
         val translatedChunks = mutableListOf<String>()
         var currentKeyIndex = 0
@@ -123,11 +137,16 @@ class GeminiManager {
                         apiKey = apiKey,
                         requestOptions = RequestOptions(timeout = 180.seconds),
                         systemInstruction = content {
-                            text(systemInstruction)
+                            text(if (chunkIndex == 0 && !title.isNullOrBlank()) systemInstructionWithTitle else systemInstructionStandard)
                         }
                     )
 
-                    val prompt = "Dưới đây là văn bản trang web cần dịch sang ngôn ngữ đích ($targetLang):\n\n$chunk"
+                    val prompt = if (chunkIndex == 0 && !title.isNullOrBlank()) {
+                        "Tiêu đề gốc cần dịch:\n$title\n\nDưới đây là văn bản trang web cần dịch sang ngôn ngữ đích ($targetLang):\n\n$chunk"
+                    } else {
+                        "Dưới đây là văn bản trang web cần dịch sang ngôn ngữ đích ($targetLang):\n\n$chunk"
+                    }
+
                     val responseStream = generativeModel.generateContentStream(prompt)
                     val chunkBuilder = StringBuilder()
                     responseStream.collect { response ->

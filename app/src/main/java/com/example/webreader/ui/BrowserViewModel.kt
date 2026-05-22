@@ -310,25 +310,16 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             _errorMessage.value = null
             _paragraphs.value = emptyList()
             _currentParagraphIndex.value = -1
-            _foregroundTranslationStep.value = "Đang dịch tiêu đề bài viết..."
-            _foregroundTranslationSteps.value = listOf("Đang dịch tiêu đề bài viết...")
+            _foregroundTranslationStep.value = "Đang bắt đầu dịch thuật..."
+            _foregroundTranslationSteps.value = listOf("Đang bắt đầu dịch thuật...")
 
-            val logSteps = mutableListOf("Đang dịch tiêu đề bài viết...")
-            val translatedTitle = geminiManager.translateTitle(
-                title = title,
-                apiKeys = settings.geminiApiKeys,
-                modelName = settings.geminiModel,
-                sourceLang = settings.sourceLanguage,
-                targetLang = settings.targetLanguage
-            )
-            logSteps.add("Đã dịch tiêu đề: $title -> $translatedTitle")
-            _foregroundTranslationStep.value = "Tiêu đề: $translatedTitle"
-            _foregroundTranslationSteps.value = _foregroundTranslationSteps.value + "Tiêu đề: $translatedTitle"
+            val logSteps = mutableListOf("Khởi chạy tiến trình dịch (gộp tiêu đề và nội dung)...")
+            var currentTitle = title
 
             val initialLog = TransactionLog(
                 id = logId,
                 type = "Đọc ngay",
-                title = translatedTitle,
+                title = currentTitle,
                 url = url,
                 status = "Đang chạy",
                 usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
@@ -347,6 +338,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 targetLang = settings.targetLanguage,
                 customInstructions = settings.customInstructions,
                 logSteps = logSteps,
+                title = title,
                 onStepAdded = { step ->
                     _foregroundTranslationStep.value = step
                     _foregroundTranslationSteps.value = _foregroundTranslationSteps.value + step
@@ -354,7 +346,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         val updatedLog = TransactionLog(
                             id = logId,
                             type = "Đọc ngay",
-                            title = translatedTitle,
+                            title = currentTitle,
                             url = url,
                             status = "Đang chạy",
                             usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
@@ -368,7 +360,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 },
                 onContentUpdated = { totalText ->
                     viewModelScope.launch(Dispatchers.Main) {
-                        val rawParagraphs = totalText.split("\n\n")
+                        val (extractedTitle, contentText) = parseTitleAndContent(totalText, title)
+                        if (extractedTitle != currentTitle) {
+                            currentTitle = extractedTitle
+                            _title.value = extractedTitle
+                        }
+                        
+                        val rawParagraphs = contentText.split("\n\n")
                             .map { it.trim() }
                             .filter { it.isNotEmpty() }
                         
@@ -377,7 +375,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                             _paragraphs.value = rawParagraphs
                             
                             if (wasEmpty && rawParagraphs.isNotEmpty()) {
-                                _title.value = translatedTitle
+                                _title.value = currentTitle
                                 _url.value = url
                                 updateBookmarkStatus()
                                 _currentQueueItemIndex.value = -1
@@ -401,19 +399,22 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
             _isTranslating.value = false
             result.onSuccess { translatedText ->
-                val rawParagraphs = translatedText.split("\n\n")
+                val (extractedTitle, contentText) = parseTitleAndContent(translatedText, title)
+                currentTitle = extractedTitle
+
+                val rawParagraphs = contentText.split("\n\n")
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
                 
                 _paragraphs.value = rawParagraphs
-                _title.value = translatedTitle
+                _title.value = currentTitle
                 _url.value = url
                 updateBookmarkStatus()
                 
                 if (rawParagraphs.isNotEmpty()) {
                     val newItem = QueueItem(
                         id = java.util.UUID.randomUUID().toString(),
-                        title = translatedTitle,
+                        title = currentTitle,
                         url = url,
                         paragraphs = rawParagraphs,
                         folderId = folderId
@@ -449,7 +450,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 val finalLog = TransactionLog(
                     id = logId,
                     type = "Đọc ngay",
-                    title = translatedTitle,
+                    title = currentTitle,
                     url = url,
                     status = "Thành công",
                     usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
@@ -466,7 +467,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 val finalLog = TransactionLog(
                     id = logId,
                     type = "Đọc ngay",
-                    title = translatedTitle,
+                    title = currentTitle,
                     url = url,
                     status = "Thất bại",
                     usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
@@ -521,25 +522,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
         val logId = job.id
         viewModelScope.launch {
-            val logSteps = mutableListOf("Bắt đầu dịch nền bài viết...")
-            val translatedTitle = geminiManager.translateTitle(
-                title = title,
-                apiKeys = settings.geminiApiKeys,
-                modelName = settings.geminiModel,
-                sourceLang = settings.sourceLanguage,
-                targetLang = settings.targetLanguage
-            )
-            logSteps.add("Đã dịch tiêu đề: $title -> $translatedTitle")
+            val logSteps = mutableListOf("Bắt đầu dịch nền bài viết (gộp tiêu đề và nội dung)...")
+            var currentTitle = title
             
-            // Update the job title to the translated title so the user sees it in the "Đang dịch" section
-            _activeTranslations.value = _activeTranslations.value.map {
-                if (it.id == job.id) it.copy(title = translatedTitle) else it
-            }
-
             val initialLog = TransactionLog(
                 id = logId,
                 type = "Hàng chờ",
-                title = translatedTitle,
+                title = currentTitle,
                 url = url,
                 status = "Đang chạy",
                 usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
@@ -558,6 +547,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 targetLang = settings.targetLanguage,
                 customInstructions = settings.customInstructions,
                 logSteps = logSteps,
+                title = title,
                 onStepAdded = { step ->
                     _activeTranslations.value = _activeTranslations.value.map {
                         if (it.id == job.id) it.copy(currentStep = step) else it
@@ -566,7 +556,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         val updatedLog = TransactionLog(
                             id = logId,
                             type = "Hàng chờ",
-                            title = translatedTitle,
+                            title = currentTitle,
                             url = url,
                             status = "Đang chạy",
                             usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
@@ -577,11 +567,25 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         transactionLogRepository.addLog(updatedLog)
                         _translationLogs.value = transactionLogRepository.getLogs()
                     }
+                },
+                onContentUpdated = { totalText ->
+                    viewModelScope.launch(Dispatchers.Main) {
+                        val (extractedTitle, _) = parseTitleAndContent(totalText, title)
+                        if (extractedTitle != currentTitle) {
+                            currentTitle = extractedTitle
+                            _activeTranslations.value = _activeTranslations.value.map {
+                                if (it.id == job.id) it.copy(title = extractedTitle) else it
+                            }
+                        }
+                    }
                 }
             )
 
             result.onSuccess { translatedText ->
-                val rawParagraphs = translatedText.split("\n\n")
+                val (extractedTitle, contentText) = parseTitleAndContent(translatedText, title)
+                currentTitle = extractedTitle
+
+                val rawParagraphs = contentText.split("\n\n")
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
                 
@@ -590,7 +594,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 if (rawParagraphs.isNotEmpty()) {
                     val newItem = QueueItem(
                         id = java.util.UUID.randomUUID().toString(),
-                        title = translatedTitle,
+                        title = currentTitle,
                         url = url,
                         paragraphs = rawParagraphs,
                         folderId = folderId
@@ -615,14 +619,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     
                     android.widget.Toast.makeText(
                         getApplication(),
-                        "Đã thêm vào hàng chờ: $translatedTitle",
+                        "Đã thêm vào hàng chờ: $currentTitle",
                         android.widget.Toast.LENGTH_SHORT
                     ).show()
 
                     val finalLog = TransactionLog(
                         id = logId,
                         type = "Hàng chờ",
-                        title = translatedTitle,
+                        title = currentTitle,
                         url = url,
                         status = "Thành công",
                         usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
@@ -638,14 +642,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     }
                     android.widget.Toast.makeText(
                         getApplication(),
-                        "Lỗi: Không phân tích được đoạn văn cho bài viết: $translatedTitle",
+                        "Lỗi: Không phân tích được đoạn văn cho bài viết: $currentTitle",
                         android.widget.Toast.LENGTH_LONG
                     ).show()
 
                     val finalLog = TransactionLog(
                         id = logId,
                         type = "Hàng chờ",
-                        title = translatedTitle,
+                        title = currentTitle,
                         url = url,
                         status = "Thất bại",
                         usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
@@ -666,14 +670,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 }
                 android.widget.Toast.makeText(
                     getApplication(),
-                    "Lỗi dịch thuật bài viết \"$translatedTitle\":\n$errMsg",
+                    "Lỗi dịch thuật bài viết \"$currentTitle\":\n$errMsg",
                     android.widget.Toast.LENGTH_LONG
                 ).show()
 
                 val finalLog = TransactionLog(
                     id = logId,
                     type = "Hàng chờ",
-                    title = translatedTitle,
+                    title = currentTitle,
                     url = url,
                     status = "Thất bại",
                     usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
@@ -778,24 +782,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         
         val logId = job.id
         viewModelScope.launch {
-            val logSteps = mutableListOf("Bắt đầu thử lại dịch thuật...")
-            val translatedTitle = geminiManager.translateTitle(
-                title = job.title,
-                apiKeys = settings.geminiApiKeys,
-                modelName = settings.geminiModel,
-                sourceLang = settings.sourceLanguage,
-                targetLang = settings.targetLanguage
-            )
-            logSteps.add("Đã dịch tiêu đề: ${job.title} -> $translatedTitle")
-            
-            _activeTranslations.value = _activeTranslations.value.map {
-                if (it.id == job.id) it.copy(title = translatedTitle) else it
-            }
+            val logSteps = mutableListOf("Bắt đầu thử lại dịch thuật (gộp tiêu đề và nội dung)...")
+            var currentTitle = job.title
 
             val initialLog = TransactionLog(
                 id = logId,
                 type = "Hàng chờ",
-                title = translatedTitle,
+                title = currentTitle,
                 url = job.url,
                 status = "Đang chạy",
                 usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
@@ -814,6 +807,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 targetLang = settings.targetLanguage,
                 customInstructions = settings.customInstructions,
                 logSteps = logSteps,
+                title = job.title,
                 onStepAdded = { step ->
                     _activeTranslations.value = _activeTranslations.value.map {
                         if (it.id == job.id) it.copy(currentStep = step) else it
@@ -822,7 +816,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         val updatedLog = TransactionLog(
                             id = logId,
                             type = "Hàng chờ",
-                            title = translatedTitle,
+                            title = currentTitle,
                             url = job.url,
                             status = "Đang chạy",
                             usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
@@ -833,11 +827,25 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         transactionLogRepository.addLog(updatedLog)
                         _translationLogs.value = transactionLogRepository.getLogs()
                     }
+                },
+                onContentUpdated = { totalText ->
+                    viewModelScope.launch(Dispatchers.Main) {
+                        val (extractedTitle, _) = parseTitleAndContent(totalText, job.title)
+                        if (extractedTitle != currentTitle) {
+                            currentTitle = extractedTitle
+                            _activeTranslations.value = _activeTranslations.value.map {
+                                if (it.id == job.id) it.copy(title = extractedTitle) else it
+                            }
+                        }
+                    }
                 }
             )
             
             result.onSuccess { translatedText ->
-                val rawParagraphs = translatedText.split("\n\n")
+                val (extractedTitle, contentText) = parseTitleAndContent(translatedText, job.title)
+                currentTitle = extractedTitle
+
+                val rawParagraphs = contentText.split("\n\n")
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
                 
@@ -851,7 +859,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
                     val newItem = QueueItem(
                         id = java.util.UUID.randomUUID().toString(),
-                        title = translatedTitle,
+                        title = currentTitle,
                         url = job.url,
                         paragraphs = rawParagraphs,
                         folderId = folderId
@@ -876,14 +884,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     
                     android.widget.Toast.makeText(
                         getApplication(),
-                        "Đã thêm vào hàng chờ: $translatedTitle",
+                        "Đã thêm vào hàng chờ: $currentTitle",
                         android.widget.Toast.LENGTH_SHORT
                     ).show()
  
                     val finalLog = TransactionLog(
                         id = logId,
                         type = "Hàng chờ",
-                        title = translatedTitle,
+                        title = currentTitle,
                         url = job.url,
                         status = "Thành công",
                         usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
@@ -901,7 +909,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     val finalLog = TransactionLog(
                         id = logId,
                         type = "Hàng chờ",
-                        title = translatedTitle,
+                        title = currentTitle,
                         url = job.url,
                         status = "Thất bại",
                         usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
@@ -924,7 +932,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 val finalLog = TransactionLog(
                     id = logId,
                     type = "Hàng chờ",
-                    title = translatedTitle,
+                    title = currentTitle,
                     url = job.url,
                     status = "Thất bại",
                     usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
@@ -1214,6 +1222,30 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             activeInstance = null
         }
         ttsManager.shutdown()
+    }
+
+    private fun parseTitleAndContent(text: String, originalTitle: String): Pair<String, String> {
+        val trimmed = text.trimStart()
+        if (trimmed.startsWith("Title:", ignoreCase = true)) {
+            val titleLineEnd = trimmed.indexOf('\n')
+            if (titleLineEnd != -1) {
+                val titleLine = trimmed.substring(0, titleLineEnd)
+                val extractedTitle = titleLine.substring(6).trim()
+                val content = trimmed.substring(titleLineEnd).trim()
+                val finalTitle = if (extractedTitle.isNotBlank()) extractedTitle else originalTitle
+                return Pair(finalTitle, content)
+            } else {
+                val extractedTitle = trimmed.substring(6).trim()
+                val finalTitle = if (extractedTitle.isNotBlank()) extractedTitle else originalTitle
+                return Pair(finalTitle, "")
+            }
+        } else {
+            val prefix = "title:"
+            if (prefix.startsWith(trimmed.lowercase())) {
+                return Pair(originalTitle, "")
+            }
+            return Pair(originalTitle, text)
+        }
     }
 }
 
