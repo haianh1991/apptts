@@ -7,11 +7,14 @@ import com.example.webreader.data.GeminiManager
 import com.example.webreader.data.SettingsRepository
 import com.example.webreader.data.TtsManager
 import com.example.webreader.data.QueueItem
+import com.example.webreader.data.QueueFolder
 import com.example.webreader.data.QueueRepository
 import com.example.webreader.data.BookmarkItem
 import com.example.webreader.data.BookmarkRepository
 import com.example.webreader.data.TransactionLog
 import com.example.webreader.data.TransactionLogRepository
+import com.example.webreader.data.AppUpdateInfo
+import com.example.webreader.data.UpdateManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +38,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     private val _queue = MutableStateFlow<List<QueueItem>>(emptyList())
     val queue: StateFlow<List<QueueItem>> = _queue
+
+    private val _folders = MutableStateFlow<List<QueueFolder>>(emptyList())
+    val folders: StateFlow<List<QueueFolder>> = _folders
 
     private val _translationLogs = MutableStateFlow<List<TransactionLog>>(emptyList())
     val translationLogs: StateFlow<List<TransactionLog>> = _translationLogs
@@ -94,9 +100,21 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private val _showReaderSheet = MutableStateFlow(false)
     val showReaderSheet: StateFlow<Boolean> = _showReaderSheet
 
+    // App Update flows
+    private val _updateInfo = MutableStateFlow<AppUpdateInfo?>(null)
+    val updateInfo: StateFlow<AppUpdateInfo?> = _updateInfo
+
+    private val _showUpdateDialog = MutableStateFlow(false)
+    val showUpdateDialog: StateFlow<Boolean> = _showUpdateDialog
+
+    private val _isForceUpdate = MutableStateFlow(false)
+    val isForceUpdate: StateFlow<Boolean> = _isForceUpdate
+
     init {
         activeInstance = this
-        _queue.value = queueRepository.getQueue()
+        val queueData = queueRepository.getQueueData()
+        _folders.value = queueData.folders
+        _queue.value = sortQueueItems(queueData.items, queueData.folders)
         _bookmarks.value = bookmarkRepository.getBookmarks()
         updateBookmarkStatus()
         viewModelScope.launch {
@@ -114,6 +132,24 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 _isPlaying.value = false
             }
         )
+        checkAppUpdate()
+    }
+
+    private fun sortQueueItems(items: List<QueueItem>, foldersList: List<QueueFolder>): List<QueueItem> {
+        val sortedFolders = foldersList.sortedBy { it.createdAt }
+        val folderIds = sortedFolders.map { it.id }.toSet()
+        val groupedItems = items.groupBy { it.folderId }
+        val result = mutableListOf<QueueItem>()
+        
+        sortedFolders.forEach { folder ->
+            val folderItems = groupedItems[folder.id] ?: emptyList()
+            result.addAll(folderItems.sortedBy { it.createdAt })
+        }
+        
+        val rootItems = items.filter { it.folderId == null || !folderIds.contains(it.folderId) }
+        result.addAll(rootItems.sortedByDescending { it.createdAt })
+        
+        return result
     }
 
     private fun playNextParagraph(completedIndex: Int) {
@@ -223,7 +259,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun translateWebpage(text: String, title: String, url: String) {
+    fun translateWebpage(text: String, title: String, url: String, folderId: String? = null) {
         if (settings.geminiApiKeys.isEmpty()) {
             val errMsg = "Vui lòng nhập API Key trong phần Cài đặt để dịch trang web."
             _errorMessage.value = errMsg
@@ -345,21 +381,39 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 _url.value = url
                 updateBookmarkStatus()
                 
-                if (_isPlaying.value) {
-                    val currentIndex = _currentParagraphIndex.value
-                    val nextIndex = if (currentIndex == -2) 0 else currentIndex + 1
-                    if (nextIndex in rawParagraphs.indices) {
-                        if (!ttsManager.isSpeaking()) {
-                            _currentParagraphIndex.value = nextIndex
-                            ttsManager.speak(rawParagraphs[nextIndex], nextIndex, settings.ttsSpeed, settings.ttsPitch)
-                        }
-                    } else {
-                        playNextParagraph(currentIndex)
+                if (rawParagraphs.isNotEmpty()) {
+                    val newItem = QueueItem(
+                        id = java.util.UUID.randomUUID().toString(),
+                        title = translatedTitle,
+                        url = url,
+                        paragraphs = rawParagraphs,
+                        folderId = folderId
+                    )
+                    val allItems = _queue.value.toMutableList().apply { add(newItem) }
+                    val sortedItems = sortQueueItems(allItems, _folders.value)
+                    _queue.value = sortedItems
+                    queueRepository.saveQueueData(_folders.value, sortedItems)
+
+                    val newIndex = sortedItems.indexOfFirst { it.id == newItem.id }
+                    if (newIndex != -1) {
+                        _currentQueueItemIndex.value = newIndex
                     }
-                } else if (rawParagraphs.isNotEmpty() && _currentParagraphIndex.value == -1) {
-                    _currentQueueItemIndex.value = -1
-                    playParagraph(0)
-                } else if (rawParagraphs.isEmpty()) {
+
+                    if (_isPlaying.value) {
+                        val currentIndex = _currentParagraphIndex.value
+                        val nextIndex = if (currentIndex == -2) 0 else currentIndex + 1
+                        if (nextIndex in rawParagraphs.indices) {
+                            if (!ttsManager.isSpeaking()) {
+                                _currentParagraphIndex.value = nextIndex
+                                ttsManager.speak(rawParagraphs[nextIndex], nextIndex, settings.ttsSpeed, settings.ttsPitch)
+                            }
+                        } else {
+                            playNextParagraph(currentIndex)
+                        }
+                    } else if (_currentParagraphIndex.value == -1) {
+                        playParagraph(0)
+                    }
+                } else {
                     _errorMessage.value = "Bản dịch rỗng hoặc không phân tích được đoạn văn."
                 }
 
@@ -397,7 +451,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun translateAndAddToQueue(text: String, title: String, url: String) {
+    fun translateAndAddToQueue(text: String, title: String, url: String, folderId: String? = null) {
         if (settings.geminiApiKeys.isEmpty()) {
             val errMsg = "Vui lòng nhập API Key trong phần Cài đặt để dịch trang web."
             _errorMessage.value = errMsg
@@ -500,18 +554,20 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         id = java.util.UUID.randomUUID().toString(),
                         title = translatedTitle,
                         url = url,
-                        paragraphs = rawParagraphs
+                        paragraphs = rawParagraphs,
+                        folderId = folderId
                     )
-                    val updatedQueue = _queue.value.toMutableList().apply { add(newItem) }
-                    _queue.value = updatedQueue
-                    queueRepository.saveQueue(updatedQueue)
+                    val allItems = _queue.value.toMutableList().apply { add(newItem) }
+                    val sortedItems = sortQueueItems(allItems, _folders.value)
+                    _queue.value = sortedItems
+                    queueRepository.saveQueueData(_folders.value, sortedItems)
                     
                     if (_currentQueueItemIndex.value == -1 && _paragraphs.value.isEmpty()) {
-                        // Load the item if queue is empty
                         val qList = _queue.value
-                        if (updatedQueue.lastIndex in qList.indices) {
-                            val item = qList[updatedQueue.lastIndex]
-                            _currentQueueItemIndex.value = updatedQueue.lastIndex
+                        val newIndex = qList.indexOfFirst { it.id == newItem.id }
+                        if (newIndex != -1) {
+                            val item = qList[newIndex]
+                            _currentQueueItemIndex.value = newIndex
                             _paragraphs.value = item.paragraphs
                             _title.value = item.title
                             _currentParagraphIndex.value = -1
@@ -634,7 +690,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             }
             qList.removeAt(index)
             _queue.value = qList
-            queueRepository.saveQueue(qList)
+            queueRepository.saveQueueData(_folders.value, qList)
         }
     }
 
@@ -645,6 +701,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _currentParagraphIndex.value = -1
         _currentQueueItemIndex.value = -1
         _queue.value = emptyList()
+        _folders.value = emptyList()
         _activeTranslations.value = emptyList()
         queueRepository.clearQueue()
     }
@@ -740,21 +797,29 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 if (rawParagraphs.isNotEmpty()) {
                     _activeTranslations.value = _activeTranslations.value.filter { it.id != job.id }
                     
+                    val currentItem = _currentQueueItemIndex.value.let { idx ->
+                        if (idx in _queue.value.indices) _queue.value[idx] else null
+                    }
+                    val folderId = currentItem?.folderId
+
                     val newItem = QueueItem(
                         id = java.util.UUID.randomUUID().toString(),
                         title = translatedTitle,
                         url = job.url,
-                        paragraphs = rawParagraphs
+                        paragraphs = rawParagraphs,
+                        folderId = folderId
                     )
-                    val updatedQueue = _queue.value.toMutableList().apply { add(newItem) }
-                    _queue.value = updatedQueue
-                    queueRepository.saveQueue(updatedQueue)
+                    val allItems = _queue.value.toMutableList().apply { add(newItem) }
+                    val sortedItems = sortQueueItems(allItems, _folders.value)
+                    _queue.value = sortedItems
+                    queueRepository.saveQueueData(_folders.value, sortedItems)
                     
                     if (_currentQueueItemIndex.value == -1 && _paragraphs.value.isEmpty()) {
                         val qList = _queue.value
-                        if (updatedQueue.lastIndex in qList.indices) {
-                            val item = qList[updatedQueue.lastIndex]
-                            _currentQueueItemIndex.value = updatedQueue.lastIndex
+                        val newIndex = qList.indexOfFirst { it.id == newItem.id }
+                        if (newIndex != -1) {
+                            val item = qList[newIndex]
+                            _currentQueueItemIndex.value = newIndex
                             _paragraphs.value = item.paragraphs
                             _title.value = item.title
                             _currentParagraphIndex.value = -1
@@ -848,12 +913,127 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             }
             
             _queue.value = currentList
-            queueRepository.saveQueue(currentList)
+            queueRepository.saveQueueData(_folders.value, currentList)
+        }
+    }
+
+    fun createFolder(name: String): String {
+        val folderId = java.util.UUID.randomUUID().toString()
+        val newFolder = QueueFolder(
+            id = folderId,
+            name = name
+        )
+        val updatedFolders = _folders.value.toMutableList().apply { add(newFolder) }
+        _folders.value = updatedFolders
+        
+        val sortedItems = sortQueueItems(_queue.value, updatedFolders)
+        _queue.value = sortedItems
+        
+        queueRepository.saveQueueData(updatedFolders, sortedItems)
+        return folderId
+    }
+
+    fun renameFolder(folderId: String, newName: String) {
+        val updatedFolders = _folders.value.map {
+            if (it.id == folderId) it.copy(name = newName) else it
+        }
+        _folders.value = updatedFolders
+        queueRepository.saveQueueData(updatedFolders, _queue.value)
+    }
+
+    fun deleteFolder(folderId: String, deleteItems: Boolean) {
+        val updatedFolders = _folders.value.filter { it.id != folderId }
+        _folders.value = updatedFolders
+        
+        val currentQueue = _queue.value
+        val updatedQueue = if (deleteItems) {
+            val activeItemIndex = _currentQueueItemIndex.value
+            val isPlayingItemDeleted = activeItemIndex != -1 && currentQueue[activeItemIndex].folderId == folderId
+            if (isPlayingItemDeleted) {
+                pauseReading()
+                _paragraphs.value = emptyList()
+                _title.value = "Trình duyệt"
+                _currentParagraphIndex.value = -1
+                _currentQueueItemIndex.value = -1
+            }
+            val remainingItems = currentQueue.filter { it.folderId != folderId }
+            if (_currentQueueItemIndex.value != -1) {
+                val currentActiveItem = currentQueue[_currentQueueItemIndex.value]
+                _currentQueueItemIndex.value = remainingItems.indexOfFirst { it.id == currentActiveItem.id }
+            }
+            remainingItems
+        } else {
+            currentQueue.map {
+                if (it.folderId == folderId) it.copy(folderId = null) else it
+            }
+        }
+        
+        val sortedItems = sortQueueItems(updatedQueue, updatedFolders)
+        _queue.value = sortedItems
+        
+        if (_currentQueueItemIndex.value != -1) {
+            val currentActiveItem = currentQueue.getOrNull(_currentQueueItemIndex.value)
+            if (currentActiveItem != null) {
+                _currentQueueItemIndex.value = sortedItems.indexOfFirst { it.id == currentActiveItem.id }
+            }
+        }
+        
+        queueRepository.saveQueueData(updatedFolders, sortedItems)
+    }
+
+    fun moveQueueItemToFolder(itemId: String, folderId: String?) {
+        val currentQueue = _queue.value
+        val activeIndex = _currentQueueItemIndex.value
+        val activeItem = if (activeIndex != -1) currentQueue.getOrNull(activeIndex) else null
+
+        val updatedQueue = currentQueue.map {
+            if (it.id == itemId) it.copy(folderId = folderId) else it
+        }
+        
+        val sortedItems = sortQueueItems(updatedQueue, _folders.value)
+        _queue.value = sortedItems
+        
+        if (activeItem != null) {
+            _currentQueueItemIndex.value = sortedItems.indexOfFirst { it.id == activeItem.id }
+        }
+        
+        queueRepository.saveQueueData(_folders.value, sortedItems)
+    }
+
+    fun playQueueItemById(itemId: String) {
+        val qList = _queue.value
+        val index = qList.indexOfFirst { it.id == itemId }
+        if (index != -1) {
+            playQueueItem(index)
+        }
+    }
+
+    fun removeQueueItemById(itemId: String) {
+        val qList = _queue.value.toMutableList()
+        val index = qList.indexOfFirst { it.id == itemId }
+        if (index != -1) {
+            val currentIdx = _currentQueueItemIndex.value
+            if (currentIdx == index) {
+                pauseReading()
+                _paragraphs.value = emptyList()
+                _title.value = "Trình duyệt"
+                _currentParagraphIndex.value = -1
+                _currentQueueItemIndex.value = -1
+            } else if (currentIdx > index) {
+                _currentQueueItemIndex.value = currentIdx - 1
+            }
+            qList.removeAt(index)
+            _queue.value = qList
+            queueRepository.saveQueueData(_folders.value, qList)
         }
     }
 
     fun setUrl(newUrl: String) {
-        _url.value = newUrl
+        var cleanUrl = newUrl
+        if (cleanUrl.contains("#googtrans")) {
+            cleanUrl = cleanUrl.substringBefore("#googtrans")
+        }
+        _url.value = cleanUrl
         updateBookmarkStatus()
     }
 
@@ -938,6 +1118,28 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             transactionLogRepository.clearLogs()
             _translationLogs.value = emptyList()
         }
+    }
+
+    fun checkAppUpdate() {
+        viewModelScope.launch {
+            val updateManager = UpdateManager(getApplication())
+            val configUrl = settings.updateConfigUrl
+            updateManager.checkUpdate(configUrl).onSuccess { info ->
+                val currentCode = updateManager.currentVersionCode
+                val resolverResult = com.example.webreader.data.UpdateCheckResolver.resolve(currentCode, info)
+                if (resolverResult.showDialog) {
+                    _updateInfo.value = info
+                    _isForceUpdate.value = resolverResult.isForce
+                    _showUpdateDialog.value = true
+                }
+            }.onFailure {
+                // Thất bại thì bỏ qua (offline hoặc ngoại tuyến, tránh chặn ứng dụng)
+            }
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        _showUpdateDialog.value = false
     }
 
     override fun onCleared() {

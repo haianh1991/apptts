@@ -34,5 +34,10 @@ class SettingsRepository(context: Context) {
     var ttsEngine: String
         get() = prefs.getString("tts_engine", "") ?: ""
         set(value) = prefs.edit().putString("tts_engine", value).apply()
+
+    var updateConfigUrl: String
+        get() = prefs.getString("update_config_url", "https://raw.githubusercontent.com/haianh1991/apptts/main/version.json") ?: "https://raw.githubusercontent.com/haianh1991/apptts/main/version.json"
+        set(value) = prefs.edit().putString("update_config_url", value).apply()
 }
+
 
