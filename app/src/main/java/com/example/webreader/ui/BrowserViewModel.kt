@@ -21,6 +21,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
+import com.example.webreader.data.AuthManager
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 
 class BrowserViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
@@ -35,6 +38,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val queueRepository = QueueRepository(application)
     val bookmarkRepository = BookmarkRepository(application)
     val transactionLogRepository = TransactionLogRepository(application)
+
+    val authManager = AuthManager(application)
+    private val _currentUser = MutableStateFlow<FirebaseUser?>(authManager.currentUser)
+    val currentUser: StateFlow<FirebaseUser?> = _currentUser
+
+    private val authListener = FirebaseAuth.AuthStateListener { auth ->
+        _currentUser.value = auth.currentUser
+    }
 
     private val _queue = MutableStateFlow<List<QueueItem>>(emptyList())
     val queue: StateFlow<List<QueueItem>> = _queue
@@ -132,6 +143,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 _isPlaying.value = false
             }
         )
+        FirebaseAuth.getInstance().addAuthStateListener(authListener)
         checkAppUpdate()
     }
 
@@ -1142,8 +1154,27 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _showUpdateDialog.value = false
     }
 
+    fun signInWithGoogle(idToken: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            val result = authManager.signInWithGoogle(idToken)
+            if (result.isSuccess) {
+                onSuccess()
+            } else {
+                val errorMsg = result.exceptionOrNull()?.message ?: "Đăng nhập thất bại"
+                onError(errorMsg)
+            }
+        }
+    }
+
+    fun signOut() {
+        viewModelScope.launch {
+            authManager.signOut()
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
+        FirebaseAuth.getInstance().removeAuthStateListener(authListener)
         if (activeInstance == this) {
             activeInstance = null
         }

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "9281271696",
+    "project_id": "webaitranstts",
+    "storage_bucket": "webaitranstts.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:9281271696:android:db400f2328270d5b786515",
+        "android_client_info": {
+          "package_name": "com.example.webreader"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCuXAc6i9jMmQHdSBOoa4g1i6jbyaqh6YQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

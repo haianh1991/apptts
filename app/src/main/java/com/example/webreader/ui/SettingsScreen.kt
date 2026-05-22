@@ -64,6 +64,13 @@ import com.example.webreader.data.TransactionLog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.common.api.ApiException
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,6 +127,168 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Card Tài khoản người dùng (Firebase Auth)
+            val currentUser by viewModel.currentUser.collectAsState()
+            val context = androidx.compose.ui.platform.LocalContext.current
+            
+            val signInLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.StartActivityForResult()
+            ) { result ->
+                if (result.resultCode == android.app.Activity.RESULT_OK) {
+                    val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+                    try {
+                        val account = task.getResult(ApiException::class.java)
+                        val idToken = account.idToken
+                        if (idToken != null) {
+                            viewModel.signInWithGoogle(
+                                idToken = idToken,
+                                onSuccess = {
+                                    android.widget.Toast.makeText(context, "Đăng nhập thành công!", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                onError = { error ->
+                                    android.widget.Toast.makeText(context, "Đăng nhập thất bại: $error", android.widget.Toast.LENGTH_LONG).show()
+                                }
+                            )
+                        } else {
+                            android.widget.Toast.makeText(context, "Không nhận được ID Token từ Google", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    } catch (e: ApiException) {
+                        android.widget.Toast.makeText(context, "Đăng nhập thất bại (Mã lỗi: ${e.statusCode})", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+            
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Tài khoản người dùng",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    val user = currentUser
+                    if (user != null) {
+                        // Trạng thái đã đăng nhập
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            // Avatar hình tròn với gradient
+                            val avatarGradient = androidx.compose.ui.graphics.Brush.linearGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    MaterialTheme.colorScheme.tertiaryContainer
+                                )
+                            )
+                            androidx.compose.foundation.layout.Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(avatarGradient),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                val displayName = user.displayName ?: user.email ?: "User"
+                                val firstLetter = displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
+                                Text(
+                                    text = firstLetter,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = user.displayName ?: "Người dùng Web Reader",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = user.email ?: "Không có email",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "UID: ${user.uid.take(12)}...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        OutlinedButton(
+                            onClick = { viewModel.signOut() },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Delete,
+                                contentDescription = "Đăng xuất"
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Đăng xuất tài khoản")
+                        }
+                    } else {
+                        // Trạng thái chưa đăng nhập
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "Đăng nhập bằng Google để đồng bộ cài đặt và theo dõi quyền lợi người dùng.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+                            
+                            Spacer(modifier = Modifier.height(4.dp))
+                            
+                            Button(
+                                onClick = {
+                                    val client = viewModel.authManager.getGoogleSignInClient()
+                                    signInLauncher.launch(client.signInIntent)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp),
+                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            ) {
+                                Text(
+                                    text = "G  ",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "Đăng nhập bằng tài khoản Google",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // Card cấu hình Gemini API
             Card(
                 modifier = Modifier.fillMaxWidth(),

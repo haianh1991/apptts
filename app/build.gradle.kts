@@ -2,6 +2,7 @@ plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
+  alias(libs.plugins.google.services)
 }
 
 android {
@@ -85,4 +86,12 @@ dependencies {
   // Gemini API & Material Icons Extended
   implementation(libs.google.generativeai)
   implementation(libs.androidx.compose.material.icons.extended)
+
+  // Firebase
+  implementation(platform(libs.firebase.bom))
+  implementation(libs.firebase.auth)
+  implementation(libs.firebase.analytics)
+  implementation(libs.firebase.firestore)
+  implementation(libs.play.services.auth)
+  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 }
