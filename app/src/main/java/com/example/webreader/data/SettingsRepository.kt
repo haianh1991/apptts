@@ -20,7 +20,7 @@ class SettingsRepository(context: Context) {
         }
 
     var geminiModel: String
-        get() = prefs.getString("gemini_model", "gemini-1.5-flash") ?: "gemini-1.5-flash"
+        get() = prefs.getString("gemini_model", "gemini-2.5-flash") ?: "gemini-2.5-flash"
         set(value) = prefs.edit().putString("gemini_model", value).apply()
 
     var ttsSpeed: Float

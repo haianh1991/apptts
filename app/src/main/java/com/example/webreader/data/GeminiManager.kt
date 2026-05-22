@@ -13,7 +13,7 @@ class GeminiManager {
     suspend fun translateTitle(
         title: String,
         apiKeys: List<String>,
-        modelName: String = "gemini-1.5-flash",
+        modelName: String = "gemini-2.5-flash",
         sourceLang: String = "Auto",
         targetLang: String = "Tiếng Việt"
     ): String = withContext(Dispatchers.IO) {
@@ -48,7 +48,7 @@ class GeminiManager {
     suspend fun translateContent(
         text: String,
         apiKeys: List<String>,
-        modelName: String = "gemini-1.5-flash",
+        modelName: String = "gemini-2.5-flash",
         sourceLang: String = "Auto",
         targetLang: String = "Tiếng Việt",
         customInstructions: String = "",
