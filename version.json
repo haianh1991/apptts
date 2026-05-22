@@ -1,0 +1,7 @@
+{
+  "versionCode": 3,
+  "versionName": "1.2.0",
+  "minVersionCode": 2,
+  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.2.0.apk",
+  "releaseNotes": "Cập nhật thay đổi ngôn ngữ hiển thị giao diện (VI, EN, ZH) và nâng cấp prompt cá nhân hóa."
+}
