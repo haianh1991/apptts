@@ -4,6 +4,7 @@ import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.RequestOptions
 import com.google.ai.client.generativeai.type.content
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.seconds
 
@@ -14,7 +15,8 @@ class GeminiManager {
         apiKeys: List<String>,
         modelName: String = "gemini-1.5-flash",
         logSteps: MutableList<String>,
-        onStepAdded: ((String) -> Unit)? = null
+        onStepAdded: ((String) -> Unit)? = null,
+        onContentUpdated: ((String) -> Unit)? = null
     ): Result<String> = withContext(Dispatchers.IO) {
         fun addStep(step: String) {
             logSteps.add(step)
@@ -87,9 +89,18 @@ class GeminiManager {
                     )
 
                     val prompt = "Dưới đây là văn bản trang web cần dịch sang tiếng Việt:\n\n$chunk"
-                    val response = generativeModel.generateContent(prompt)
-                    val translatedText = response.text
-                    if (translatedText != null) {
+                    val responseStream = generativeModel.generateContentStream(prompt)
+                    val chunkBuilder = StringBuilder()
+                    responseStream.collect { response ->
+                        val chunkText = response.text
+                        if (chunkText != null) {
+                            chunkBuilder.append(chunkText)
+                            val currentTotalText = (translatedChunks + chunkBuilder.toString()).joinToString("\n\n")
+                            onContentUpdated?.invoke(currentTotalText)
+                        }
+                    }
+                    val translatedText = chunkBuilder.toString()
+                    if (translatedText.isNotEmpty()) {
                         chunkResult = translatedText
                         chunkSuccess = true
                         currentKeyIndex = keyIdx

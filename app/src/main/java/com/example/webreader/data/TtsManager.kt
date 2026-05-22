@@ -138,6 +138,10 @@ class TtsManager(private val context: Context) {
         }
     }
 
+    fun isSpeaking(): Boolean {
+        return tts?.isSpeaking == true
+    }
+
     fun stop() {
         tts?.stop()
         TtsService.stop(context, fromApp = true)

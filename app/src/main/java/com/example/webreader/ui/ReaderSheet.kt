@@ -232,7 +232,7 @@ fun ReaderSheet(
                 when (activeTab) {
                     0 -> {
                         when {
-                            isTranslating -> {
+                            isTranslating && paragraphs.isEmpty() -> {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.Center
@@ -436,8 +436,32 @@ fun ReaderSheet(
                                             )
                                         }
                                     }
-                                    item {
-                                        Spacer(modifier = Modifier.height(24.dp))
+                                    if (isTranslating) {
+                                        item {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 16.dp),
+                                                horizontalArrangement = Arrangement.Center,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(20.dp),
+                                                    strokeWidth = 2.dp,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = "Đang dịch tiếp...",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.outline
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        item {
+                                            Spacer(modifier = Modifier.height(24.dp))
+                                        }
                                     }
                                 }
                             }

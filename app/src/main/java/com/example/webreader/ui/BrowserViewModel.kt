@@ -124,24 +124,31 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 val text = _paragraphs.value[nextIndex]
                 ttsManager.speak(text, nextIndex, settings.ttsSpeed, settings.ttsPitch)
             } else {
-                // Finished paragraphs of the current item! Check if there's a next queue item
-                val qList = _queue.value
-                val qIndex = _currentQueueItemIndex.value
-                if (qIndex != -1 && qIndex + 1 < qList.size) {
-                    val nextQIndex = qIndex + 1
-                    _currentQueueItemIndex.value = nextQIndex
-                    val nextItem = qList[nextQIndex]
-                    _paragraphs.value = nextItem.paragraphs
-                    _title.value = nextItem.title
-                    _currentParagraphIndex.value = -2 // Announces title first
-                    
-                    val announceText = "Bắt đầu đọc bài viết: ${nextItem.title}"
-                    ttsManager.speak(announceText, -2, settings.ttsSpeed, settings.ttsPitch)
+                if (_isTranslating.value) {
+                    // Still translating! Just update the current index to the completed index so we know we finished it,
+                    // and wait for more paragraphs.
+                    _currentParagraphIndex.value = completedIndex
+                    // We don't change _isPlaying, so it remains active and waiting.
                 } else {
-                    _isPlaying.value = false
-                    _currentParagraphIndex.value = -1
-                    _currentQueueItemIndex.value = -1
-                    ttsManager.stop()
+                    // Finished paragraphs of the current item! Check if there's a next queue item
+                    val qList = _queue.value
+                    val qIndex = _currentQueueItemIndex.value
+                    if (qIndex != -1 && qIndex + 1 < qList.size) {
+                        val nextQIndex = qIndex + 1
+                        _currentQueueItemIndex.value = nextQIndex
+                        val nextItem = qList[nextQIndex]
+                        _paragraphs.value = nextItem.paragraphs
+                        _title.value = nextItem.title
+                        _currentParagraphIndex.value = -2 // Announces title first
+                        
+                        val announceText = "Bắt đầu đọc bài viết: ${nextItem.title}"
+                        ttsManager.speak(announceText, -2, settings.ttsSpeed, settings.ttsPitch)
+                    } else {
+                        _isPlaying.value = false
+                        _currentParagraphIndex.value = -1
+                        _currentQueueItemIndex.value = -1
+                        ttsManager.stop()
+                    }
                 }
             }
         }
@@ -288,6 +295,37 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         transactionLogRepository.addLog(updatedLog)
                         _translationLogs.value = transactionLogRepository.getLogs()
                     }
+                },
+                onContentUpdated = { totalText ->
+                    viewModelScope.launch(Dispatchers.Main) {
+                        val rawParagraphs = totalText.split("\n\n")
+                            .map { it.trim() }
+                            .filter { it.isNotEmpty() }
+                        
+                        if (rawParagraphs != _paragraphs.value) {
+                            val wasEmpty = _paragraphs.value.isEmpty()
+                            _paragraphs.value = rawParagraphs
+                            
+                            if (wasEmpty && rawParagraphs.isNotEmpty()) {
+                                _title.value = title
+                                _url.value = url
+                                updateBookmarkStatus()
+                                _currentQueueItemIndex.value = -1
+                                
+                                // Auto-play paragraph 0
+                                _currentParagraphIndex.value = 0
+                                _isPlaying.value = true
+                                ttsManager.speak(rawParagraphs[0], 0, settings.ttsSpeed, settings.ttsPitch)
+                            } else if (_isPlaying.value && !wasEmpty) {
+                                val currentIndex = _currentParagraphIndex.value
+                                val nextIndex = if (currentIndex == -2) 0 else currentIndex + 1
+                                if (nextIndex in rawParagraphs.indices && !ttsManager.isSpeaking()) {
+                                    _currentParagraphIndex.value = nextIndex
+                                    ttsManager.speak(rawParagraphs[nextIndex], nextIndex, settings.ttsSpeed, settings.ttsPitch)
+                                }
+                            }
+                        }
+                    }
                 }
             )
 
@@ -301,10 +339,22 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 _title.value = title
                 _url.value = url
                 updateBookmarkStatus()
-                if (rawParagraphs.isNotEmpty()) {
+                
+                if (_isPlaying.value) {
+                    val currentIndex = _currentParagraphIndex.value
+                    val nextIndex = if (currentIndex == -2) 0 else currentIndex + 1
+                    if (nextIndex in rawParagraphs.indices) {
+                        if (!ttsManager.isSpeaking()) {
+                            _currentParagraphIndex.value = nextIndex
+                            ttsManager.speak(rawParagraphs[nextIndex], nextIndex, settings.ttsSpeed, settings.ttsPitch)
+                        }
+                    } else {
+                        playNextParagraph(currentIndex)
+                    }
+                } else if (rawParagraphs.isNotEmpty() && _currentParagraphIndex.value == -1) {
                     _currentQueueItemIndex.value = -1
                     playParagraph(0)
-                } else {
+                } else if (rawParagraphs.isEmpty()) {
                     _errorMessage.value = "Bản dịch rỗng hoặc không phân tích được đoạn văn."
                 }
 
