@@ -516,37 +516,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Card Cấu hình Cập nhật ứng dụng
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "Cập nhật ứng dụng",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-
-                    OutlinedTextField(
-                        value = updateConfigUrl,
-                        onValueChange = { updateConfigUrl = it },
-                        label = { Text("URL cấu hình phiên bản") },
-                        placeholder = { Text("Nhập URL version.json kiểm tra cập nhật") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    Text(
-                        text = "Mặc định: https://raw.githubusercontent.com/haianh1991/apptts/main/version.json",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                }
-            }
 
             // Card Nhật ký dịch thuật
             val translationLogs by viewModel.translationLogs.collectAsState(initial = emptyList())
