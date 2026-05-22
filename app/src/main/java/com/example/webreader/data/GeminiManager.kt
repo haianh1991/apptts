@@ -13,11 +13,14 @@ class GeminiManager {
     suspend fun translateTitle(
         title: String,
         apiKeys: List<String>,
-        modelName: String = "gemini-1.5-flash"
+        modelName: String = "gemini-1.5-flash",
+        sourceLang: String = "Auto",
+        targetLang: String = "Tiếng Việt"
     ): String = withContext(Dispatchers.IO) {
         if (apiKeys.isEmpty() || title.isBlank()) return@withContext title
         var currentKeyIndex = 0
         val keysCount = apiKeys.size
+        val srcLangText = if (sourceLang.equals("Auto", ignoreCase = true)) "tự động phát hiện" else sourceLang
         for (attempt in 0 until keysCount) {
             val keyIdx = (currentKeyIndex + attempt) % keysCount
             val apiKey = apiKeys[keyIdx]
@@ -27,7 +30,7 @@ class GeminiManager {
                     apiKey = apiKey,
                     requestOptions = RequestOptions(timeout = 15.seconds),
                     systemInstruction = content {
-                        text("Bạn là trợ lý dịch thuật. Hãy dịch tiêu đề chương truyện hoặc bài viết sang tiếng Việt một cách tự nhiên, ngắn gọn và chính xác nhất. Chỉ trả về bản dịch tiêu đề, không giải thích, không thêm dấu ngoặc kép hay bất kỳ thông tin nào khác.")
+                        text("Bạn là trợ lý dịch thuật. Hãy dịch tiêu đề chương truyện hoặc bài viết từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, ngắn gọn và chính xác nhất. Chỉ trả về bản dịch tiêu đề, không giải thích, không thêm dấu ngoặc kép hay bất kỳ thông tin nào khác.")
                     }
                 )
                 val response = generativeModel.generateContent(title)
@@ -42,10 +45,13 @@ class GeminiManager {
         return@withContext title
     }
 
-    suspend fun translateToVietnamese(
+    suspend fun translateContent(
         text: String,
         apiKeys: List<String>,
         modelName: String = "gemini-1.5-flash",
+        sourceLang: String = "Auto",
+        targetLang: String = "Tiếng Việt",
+        customInstructions: String = "",
         logSteps: MutableList<String>,
         onStepAdded: ((String) -> Unit)? = null,
         onContentUpdated: ((String) -> Unit)? = null
@@ -68,17 +74,19 @@ class GeminiManager {
         val chunks = splitTextIntoChunks(text, 8000)
         val totalWords = countWords(text)
         addStep("Khởi chạy tiến trình dịch thuật. Kích thước văn bản gốc: ${text.length} ký tự (khoảng $totalWords từ), chia thành ${chunks.size} phần.")
+        addStep("Ngôn ngữ: $sourceLang -> $targetLang")
         addStep("Sử dụng mô hình AI: $modelName")
 
+        val srcLangText = if (sourceLang.equals("Auto", ignoreCase = true)) "tự động phát hiện" else sourceLang
         val systemInstruction = """
             Bạn là một trợ lý dịch thuật và trích xuất nội dung thông minh.
             Nhiệm vụ của bạn là nhận văn bản thô được trích xuất từ một trang web (có chứa nhiều thành phần thừa như menu điều hướng, quảng cáo xen kẽ, các nút bấm chuyển trang, bình luận bên lề).
             Hãy thực hiện các bước sau một cách cẩn thận:
             1. Nhận diện phần nội dung bài viết/chương truyện chính trong văn bản thô. Loại bỏ hoàn toàn các thành phần thừa, quảng cáo xen kẽ giữa các câu, các nút bấm (như "Chương sau", "Mục lục", "Trang chủ"), và bình luận không liên quan của độc giả.
-            2. Dịch phần nội dung chính vừa lọc được sang tiếng Việt một cách tự nhiên, mượt mà, trôi chảy nhất và chuẩn ngữ cảnh văn học/báo chí Việt Nam.
-            3. Đối với văn bản gốc là Tiếng Trung (truyện chữ Trung Quốc), hãy giữ nguyên cách xưng hô, đại từ nhân xưng, danh từ xưng gọi và các thuật ngữ Hán-Việt cổ truyền thống (ví dụ: ngươi - ta, hắn, ả, chúng, ca, muội, tiểu muội, đại ca, nhị ca, thúc, bá, a di, thái thái, nãi nãi, công công, bà bà, tỷ tỷ, muội muội, đại nhân, phu nhân, sư phụ, thẩm, nữ nhân, nam nhân, Gia Trấn, bài phường...). Tuyệt đối không dịch các từ này thành từ ngữ hiện đại thuần Việt như "bạn - tôi", "anh ấy", "cô ấy", "bà", "thím", "người phụ nữ", "người đàn ông", "thị trấn gia đình", "cổng chào".
-            4. Giữ nguyên cấu trúc phân đoạn (phân tách rõ ràng bằng các dòng trống \n\n).
-            5. Tuyệt đối không thêm bất kỳ văn bản giới thiệu hay chú thích nào khác (như "Dưới đây là văn bản dịch..."). Chỉ trả về văn bản dịch sạch của nội dung chính.
+            2. Dịch phần nội dung chính vừa lọc được từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, mượt mà, trôi chảy nhất và chuẩn ngữ cảnh văn học/báo chí của ngôn ngữ đích.
+            3. Giữ nguyên cấu trúc phân đoạn (phân tách rõ ràng bằng các dòng trống \n\n).
+            4. Tuyệt đối không thêm bất kỳ văn bản giới thiệu hay chú thích nào khác (như "Dưới đây là văn bản dịch..."). Chỉ trả về văn bản dịch sạch của nội dung chính.
+            ${if (customInstructions.isNotBlank()) "\nYêu cầu cá nhân hóa bổ sung từ người dùng:\n$customInstructions" else ""}
         """.trimIndent()
 
         val translatedChunks = mutableListOf<String>()
@@ -120,7 +128,7 @@ class GeminiManager {
                         }
                     )
 
-                    val prompt = "Dưới đây là văn bản trang web cần dịch sang tiếng Việt:\n\n$chunk"
+                    val prompt = "Dưới đây là văn bản trang web cần dịch sang ngôn ngữ đích ($targetLang):\n\n$chunk"
                     val responseStream = generativeModel.generateContentStream(prompt)
                     val chunkBuilder = StringBuilder()
                     responseStream.collect { response ->

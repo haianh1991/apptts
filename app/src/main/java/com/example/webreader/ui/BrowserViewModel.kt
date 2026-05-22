@@ -306,7 +306,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             _foregroundTranslationSteps.value = listOf("Đang dịch tiêu đề bài viết...")
 
             val logSteps = mutableListOf("Đang dịch tiêu đề bài viết...")
-            val translatedTitle = geminiManager.translateTitle(title, settings.geminiApiKeys, settings.geminiModel)
+            val translatedTitle = geminiManager.translateTitle(
+                title = title,
+                apiKeys = settings.geminiApiKeys,
+                modelName = settings.geminiModel,
+                sourceLang = settings.sourceLanguage,
+                targetLang = settings.targetLanguage
+            )
             logSteps.add("Đã dịch tiêu đề: $title -> $translatedTitle")
             _foregroundTranslationStep.value = "Tiêu đề: $translatedTitle"
             _foregroundTranslationSteps.value = _foregroundTranslationSteps.value + "Tiêu đề: $translatedTitle"
@@ -325,10 +331,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             transactionLogRepository.addLog(initialLog)
             _translationLogs.value = transactionLogRepository.getLogs()
 
-            val result = geminiManager.translateToVietnamese(
+            val result = geminiManager.translateContent(
                 text = text,
                 apiKeys = settings.geminiApiKeys,
                 modelName = settings.geminiModel,
+                sourceLang = settings.sourceLanguage,
+                targetLang = settings.targetLanguage,
+                customInstructions = settings.customInstructions,
                 logSteps = logSteps,
                 onStepAdded = { step ->
                     _foregroundTranslationStep.value = step
@@ -505,7 +514,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         val logId = job.id
         viewModelScope.launch {
             val logSteps = mutableListOf("Bắt đầu dịch nền bài viết...")
-            val translatedTitle = geminiManager.translateTitle(title, settings.geminiApiKeys, settings.geminiModel)
+            val translatedTitle = geminiManager.translateTitle(
+                title = title,
+                apiKeys = settings.geminiApiKeys,
+                modelName = settings.geminiModel,
+                sourceLang = settings.sourceLanguage,
+                targetLang = settings.targetLanguage
+            )
             logSteps.add("Đã dịch tiêu đề: $title -> $translatedTitle")
             
             // Update the job title to the translated title so the user sees it in the "Đang dịch" section
@@ -527,10 +542,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             transactionLogRepository.addLog(initialLog)
             _translationLogs.value = transactionLogRepository.getLogs()
 
-            val result = geminiManager.translateToVietnamese(
+            val result = geminiManager.translateContent(
                 text = text,
                 apiKeys = settings.geminiApiKeys,
                 modelName = settings.geminiModel,
+                sourceLang = settings.sourceLanguage,
+                targetLang = settings.targetLanguage,
+                customInstructions = settings.customInstructions,
                 logSteps = logSteps,
                 onStepAdded = { step ->
                     _activeTranslations.value = _activeTranslations.value.map {
@@ -753,7 +771,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         val logId = job.id
         viewModelScope.launch {
             val logSteps = mutableListOf("Bắt đầu thử lại dịch thuật...")
-            val translatedTitle = geminiManager.translateTitle(job.title, settings.geminiApiKeys, settings.geminiModel)
+            val translatedTitle = geminiManager.translateTitle(
+                title = job.title,
+                apiKeys = settings.geminiApiKeys,
+                modelName = settings.geminiModel,
+                sourceLang = settings.sourceLanguage,
+                targetLang = settings.targetLanguage
+            )
             logSteps.add("Đã dịch tiêu đề: ${job.title} -> $translatedTitle")
             
             _activeTranslations.value = _activeTranslations.value.map {
@@ -774,10 +798,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             transactionLogRepository.addLog(initialLog)
             _translationLogs.value = transactionLogRepository.getLogs()
 
-            val result = geminiManager.translateToVietnamese(
+            val result = geminiManager.translateContent(
                 text = job.text,
                 apiKeys = settings.geminiApiKeys,
                 modelName = settings.geminiModel,
+                sourceLang = settings.sourceLanguage,
+                targetLang = settings.targetLanguage,
+                customInstructions = settings.customInstructions,
                 logSteps = logSteps,
                 onStepAdded = { step ->
                     _activeTranslations.value = _activeTranslations.value.map {

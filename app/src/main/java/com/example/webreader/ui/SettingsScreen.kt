@@ -87,9 +87,15 @@ fun SettingsScreen(
     var selectedEngine by remember { mutableStateOf(settings.ttsEngine) }
     var updateConfigUrl by remember { mutableStateOf(settings.updateConfigUrl) }
 
+    var sourceLanguage by remember { mutableStateOf(settings.sourceLanguage) }
+    var targetLanguage by remember { mutableStateOf(settings.targetLanguage) }
+    var customInstructions by remember { mutableStateOf(settings.customInstructions) }
+
     var apiKeyVisible by remember { mutableStateOf(false) }
     var isDropdownExpanded by remember { mutableStateOf(false) }
     var isEngineDropdownExpanded by remember { mutableStateOf(false) }
+    var isSourceDropdownExpanded by remember { mutableStateOf(false) }
+    var isTargetDropdownExpanded by remember { mutableStateOf(false) }
 
     val availableEngines = remember { viewModel.ttsManager.getAvailableTtsEngines() }
     val activeEngineLabel = availableEngines.find { it.name == selectedEngine }?.label 
@@ -387,6 +393,144 @@ fun SettingsScreen(
                 }
             }
 
+            // Card cấu hình Dịch thuật
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Cấu hình Dịch thuật",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    // Dropdown chọn Ngôn ngữ nguồn
+                    ExposedDropdownMenuBox(
+                        expanded = isSourceDropdownExpanded,
+                        onExpandedChange = { isSourceDropdownExpanded = !isSourceDropdownExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = if (sourceLanguage == "Auto") "Auto (Tự động phát hiện)" else sourceLanguage,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Ngôn ngữ nguồn") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isSourceDropdownExpanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = isSourceDropdownExpanded,
+                            onDismissRequest = { isSourceDropdownExpanded = false }
+                        ) {
+                            val sourceLanguages = listOf(
+                                "Auto",
+                                "Tiếng Trung",
+                                "Tiếng Anh",
+                                "Tiếng Nhật",
+                                "Tiếng Hàn",
+                                "Tiếng Việt",
+                                "Tiếng Pháp",
+                                "Tiếng Đức",
+                                "Tiếng Tây Ban Nha"
+                            )
+                            sourceLanguages.forEach { lang ->
+                                val displayText = if (lang == "Auto") "Auto (Tự động phát hiện)" else lang
+                                DropdownMenuItem(
+                                    text = { Text(displayText) },
+                                    onClick = {
+                                        sourceLanguage = lang
+                                        isSourceDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Dropdown chọn Ngôn ngữ đích
+                    ExposedDropdownMenuBox(
+                        expanded = isTargetDropdownExpanded,
+                        onExpandedChange = { isTargetDropdownExpanded = !isTargetDropdownExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = targetLanguage,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Ngôn ngữ đích") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isTargetDropdownExpanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = isTargetDropdownExpanded,
+                            onDismissRequest = { isTargetDropdownExpanded = false }
+                        ) {
+                            val targetLanguages = listOf(
+                                "Tiếng Việt",
+                                "Tiếng Anh",
+                                "Tiếng Trung",
+                                "Tiếng Nhật",
+                                "Tiếng Hàn",
+                                "Tiếng Pháp",
+                                "Tiếng Đức"
+                            )
+                            targetLanguages.forEach { lang ->
+                                DropdownMenuItem(
+                                    text = { Text(lang) },
+                                    onClick = {
+                                        targetLanguage = lang
+                                        isTargetDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Ô nhập Chỉ dẫn cá nhân hóa
+                    OutlinedTextField(
+                        value = customInstructions,
+                        onValueChange = { customInstructions = it },
+                        label = { Text("Chỉ dẫn dịch thuật cá nhân hóa") },
+                        placeholder = { Text("Ví dụ: Giữ nguyên cách xưng hô Hán-Việt...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = false,
+                        maxLines = 6,
+                        textStyle = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Thêm các yêu cầu riêng cho AI khi dịch.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedButton(
+                            onClick = { customInstructions = settings.defaultCustomInstructions },
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Refresh,
+                                contentDescription = "Khôi phục mặc định",
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Khôi phục mặc định", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+            }
+
             // Card cấu hình giọng đọc TTS
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -620,6 +764,9 @@ fun SettingsScreen(
                     settings.geminiApiKey = apiKey.trim()
                     settings.geminiModel = selectedModel
                     settings.updateConfigUrl = updateConfigUrl.trim()
+                    settings.sourceLanguage = sourceLanguage
+                    settings.targetLanguage = targetLanguage
+                    settings.customInstructions = customInstructions.trim()
                     viewModel.updateTtsSettings(ttsSpeed, ttsPitch, selectedEngine)
                     viewModel.checkAppUpdate()
                     onBackClick()
