@@ -21,10 +21,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.ApiException
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Translate
 
 @Composable
 fun LoginScreen(viewModel: BrowserViewModel) {
     val context = LocalContext.current
+    val appStrings = LocalAppStrings.current
     var isSigningIn by remember { mutableStateOf(false) }
 
     val signInLauncher = rememberLauncherForActivityResult(
@@ -41,20 +44,21 @@ fun LoginScreen(viewModel: BrowserViewModel) {
                         idToken = idToken,
                         onSuccess = {
                             isSigningIn = false
-                            Toast.makeText(context, "Đăng nhập thành công!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, appStrings.toastLoginSuccess, Toast.LENGTH_SHORT).show()
                         },
                         onError = { error ->
                             isSigningIn = false
-                            Toast.makeText(context, "Đăng nhập thất bại: $error", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "${appStrings.toastLoginFailed}$error", Toast.LENGTH_LONG).show()
                         }
                     )
                 } else {
                     isSigningIn = false
-                    Toast.makeText(context, "Không nhận được ID Token từ Google", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, appStrings.toastNoGoogleToken, Toast.LENGTH_SHORT).show()
                 }
             } catch (e: ApiException) {
                 isSigningIn = false
-                Toast.makeText(context, "Đăng nhập thất bại (Mã lỗi: ${e.statusCode})", Toast.LENGTH_LONG).show()
+                val errorMsg = String.format(appStrings.toastLoginFailedCode, e.statusCode.toString())
+                Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
             }
         } else {
             isSigningIn = false
@@ -88,6 +92,67 @@ fun LoginScreen(viewModel: BrowserViewModel) {
                 radius = 500f,
                 center = androidx.compose.ui.geometry.Offset(size.width * 0.85f, size.height * 0.75f)
             )
+        }
+
+        // Language Selector in TopEnd
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(16.dp)
+        ) {
+            var expanded by remember { mutableStateOf(false) }
+            val displayLang by viewModel.appDisplayLanguage.collectAsState()
+
+            TextButton(
+                onClick = { expanded = true },
+                colors = ButtonDefaults.textButtonColors(contentColor = Color.White)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Translate,
+                    contentDescription = "Select Language",
+                    modifier = Modifier.size(20.dp),
+                    tint = Color.White
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = when (displayLang) {
+                        "en" -> "EN"
+                        "zh" -> "ZH"
+                        else -> "VI"
+                    },
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.background(Color(0xFF1E1E1E))
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Tiếng Việt (VI)", color = Color.White) },
+                    onClick = {
+                        viewModel.setAppDisplayLanguage("vi")
+                        expanded = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("English (EN)", color = Color.White) },
+                    onClick = {
+                        viewModel.setAppDisplayLanguage("en")
+                        expanded = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("简体中文 (ZH)", color = Color.White) },
+                    onClick = {
+                        viewModel.setAppDisplayLanguage("zh")
+                        expanded = false
+                    }
+                )
+            }
         }
 
         // Main Login Card
@@ -139,7 +204,7 @@ fun LoginScreen(viewModel: BrowserViewModel) {
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = "WebAITransTTS",
+                        text = appStrings.appName,
                         style = MaterialTheme.typography.headlineMedium.copy(
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
@@ -147,7 +212,7 @@ fun LoginScreen(viewModel: BrowserViewModel) {
                         color = Color.White
                     )
                     Text(
-                        text = "Trình duyệt dịch thuật AI & Đọc sách TTS",
+                        text = appStrings.appDesc,
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.7f),
                         textAlign = TextAlign.Center
@@ -165,16 +230,16 @@ fun LoginScreen(viewModel: BrowserViewModel) {
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     FeatureRow(
-                        title = "Dịch thuật AI Hán-Việt tối ưu",
-                        desc = "Sử dụng mô hình Gemini dịch truyện song ngữ giữ nguyên văn phong văn học."
+                        title = appStrings.loginFeature1Title,
+                        desc = appStrings.loginFeature1Desc
                     )
                     FeatureRow(
-                        title = "Đồng bộ hóa hàng chờ & TTS nền",
-                        desc = "Nghe đọc sách bằng giọng đọc Google TTS mượt mà kể cả khi tắt màn hình."
+                        title = appStrings.loginFeature2Title,
+                        desc = appStrings.loginFeature2Desc
                     )
                     FeatureRow(
-                        title = "Quản lý và gom nhóm thư mục",
-                        desc = "Tổ chức các chương truyện dịch thông minh theo từng thư mục phân loại."
+                        title = appStrings.loginFeature3Title,
+                        desc = appStrings.loginFeature3Desc
                     )
                 }
 
@@ -215,7 +280,7 @@ fun LoginScreen(viewModel: BrowserViewModel) {
                                 modifier = Modifier.padding(end = 12.dp)
                             )
                             Text(
-                                text = "Đăng nhập bằng tài khoản Google",
+                                text = appStrings.loginGoogleButton,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF1F1F1F)
@@ -225,7 +290,7 @@ fun LoginScreen(viewModel: BrowserViewModel) {
                 }
 
                 Text(
-                    text = "Vui lòng đăng nhập để tiếp tục sử dụng dịch vụ.",
+                    text = appStrings.loginRequiredSubtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White.copy(alpha = 0.4f),
                     textAlign = TextAlign.Center,

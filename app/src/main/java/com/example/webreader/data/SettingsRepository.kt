@@ -39,7 +39,7 @@ class SettingsRepository(context: Context) {
         get() = prefs.getString("update_config_url", "https://raw.githubusercontent.com/haianh1991/apptts/main/version.json") ?: "https://raw.githubusercontent.com/haianh1991/apptts/main/version.json"
         set(value) = prefs.edit().putString("update_config_url", value).apply()
 
-    val defaultCustomInstructions: String = "Đối với văn bản gốc là Tiếng Trung (truyện chữ Trung Quốc), hãy giữ nguyên cách xưng hô, đại từ nhân xưng, danh từ xưng gọi và các thuật ngữ Hán-Việt cổ truyền thống (ví dụ: ngươi - ta, hắn, ca, muội, tỷ, đệ, thúc, bá, a di, thái thái, nãi nãi, công công, bà bà, tỷ tỷ, muội muội, đại nhân, phu nhân, sư phụ, thẩm, nữ nhân, nam nhân, Gia Trấn, bài phường...). Tuyệt đối không dịch các từ này thành từ ngữ hiện đại thuần Việt như 'bạn - tôi', 'anh ấy', 'cô ấy', 'bà', 'thím', 'người phụ nữ', 'người đàn ông'."
+    val defaultCustomInstructions: String = "Đối với văn bản gốc là Tiếng Trung (truyện chữ Trung Quốc), hãy giữ nguyên cách xưng hô, đại từ nhân xưng, danh từ xưng gọi và các thuật ngữ Hán-Việt cổ truyền thống (ví dụ: ngươi - ta, hắn, ả, chúng, ca, muội, tiểu muội, đại ca, nhị ca, thúc, bá, a di, thái thái, nãi nãi, công công, bà bà, tỷ tỷ, muội muội, đại nhân, phu nhân, sư phụ, thẩm, nữ nhân, nam nhân, Gia Trấn, bài phường...). Tuyệt đối không dịch các từ này thành từ ngữ hiện đại thuần Việt như \"bạn - tôi\", \"anh ấy\", \"cô ấy\", \"bà\", \"thím\", \"người phụ nữ\", \"người đàn ông\", \"thị trấn gia đình\", \"cổng chào\"."
 
     var sourceLanguage: String
         get() = prefs.getString("source_language", "Auto") ?: "Auto"
@@ -52,6 +52,10 @@ class SettingsRepository(context: Context) {
     var customInstructions: String
         get() = prefs.getString("custom_instructions", defaultCustomInstructions) ?: defaultCustomInstructions
         set(value) = prefs.edit().putString("custom_instructions", value).apply()
+
+    var appDisplayLanguage: String
+        get() = prefs.getString("app_display_language", "vi") ?: "vi"
+        set(value) = prefs.edit().putString("app_display_language", value).apply()
 }
 
 

@@ -88,6 +88,7 @@ fun ReaderSheet(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val appStrings = LocalAppStrings.current
     val isTranslating by viewModel.isTranslating.collectAsState()
     val foregroundTranslationStep by viewModel.foregroundTranslationStep.collectAsState()
     val foregroundTranslationSteps by viewModel.foregroundTranslationSteps.collectAsState()
@@ -149,12 +150,12 @@ fun ReaderSheet(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Trình Đọc Báo Tiếng Việt",
+                        text = appStrings.readerTitle,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = if (paragraphs.isNotEmpty()) "Đang phát đoạn ${currentIndex + 1}/${paragraphs.size}" else "Ngoại tuyến",
+                        text = if (paragraphs.isNotEmpty()) String.format(appStrings.readerPanelTitlePlaying, currentIndex + 1, paragraphs.size) else appStrings.readerPanelTitleOffline,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline
                     )
@@ -162,10 +163,10 @@ fun ReaderSheet(
 
                 Row {
                     IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Cài đặt")
+                        Icon(Icons.Filled.Settings, contentDescription = appStrings.browserMenuSettings)
                     }
                     IconButton(onClick = { viewModel.setShowReaderSheet(false) }) {
-                        Icon(Icons.Filled.Close, contentDescription = "Đóng")
+                        Icon(Icons.Filled.Close, contentDescription = appStrings.btnClose)
                     }
                 }
             }
@@ -202,7 +203,7 @@ fun ReaderSheet(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Nội dung",
+                        text = appStrings.readerTabContent,
                         color = if (activeTab == 0) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.SemiBold,
                         style = MaterialTheme.typography.bodyMedium
@@ -222,7 +223,7 @@ fun ReaderSheet(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Đã dịch (${queue.size})",
+                        text = String.format(appStrings.readerTabQueueFormat, queue.size),
                         color = if (activeTab == 1) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.SemiBold,
                         style = MaterialTheme.typography.bodyMedium
@@ -242,7 +243,7 @@ fun ReaderSheet(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Đánh dấu (${bookmarks.size})",
+                        text = String.format(appStrings.readerTabBookmarksFormat, bookmarks.size),
                         color = if (activeTab == 2) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.SemiBold,
                         style = MaterialTheme.typography.bodyMedium
@@ -271,7 +272,7 @@ fun ReaderSheet(
                                     )
                                     Spacer(modifier = Modifier.height(12.dp))
                                     Text(
-                                        text = "Đang dịch trang web bằng Gemini AI...",
+                                        text = appStrings.readerTranslatingPrompt,
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Medium
                                     )
@@ -299,8 +300,12 @@ fun ReaderSheet(
                                             items(foregroundTranslationSteps.size) { idx ->
                                                 val step = foregroundTranslationSteps[idx]
                                                 val isLast = idx == foregroundTranslationSteps.lastIndex
-                                                val isError = step.contains("Thất bại", ignoreCase = true) || step.contains("Lỗi", ignoreCase = true)
-                                                val isSuccess = step.contains("Thành công", ignoreCase = true)
+                                                val isError = step.contains("Thất bại", ignoreCase = true) || step.contains("Lỗi", ignoreCase = true) ||
+                                                              step.contains("Failed", ignoreCase = true) || step.contains("Error", ignoreCase = true) ||
+                                                              step.contains("失败", ignoreCase = true) || step.contains("错误", ignoreCase = true)
+                                                val isSuccess = step.contains("Thành công", ignoreCase = true) ||
+                                                                step.contains("Success", ignoreCase = true) ||
+                                                                step.contains("成功", ignoreCase = true)
                                                 
                                                 Row(
                                                     modifier = Modifier.fillMaxWidth(),
@@ -351,7 +356,7 @@ fun ReaderSheet(
                                     }
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(
-                                        text = "Quá trình này có thể mất vài giây tùy thuộc vào độ dài trang.",
+                                        text = appStrings.readerTranslatingSubPrompt,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.outline,
                                         modifier = Modifier.padding(horizontal = 24.dp),
@@ -367,7 +372,7 @@ fun ReaderSheet(
                                     verticalArrangement = Arrangement.Center
                                 ) {
                                     Text(
-                                        text = "Đã xảy ra lỗi",
+                                        text = appStrings.readerErrorTitle,
                                         style = MaterialTheme.typography.titleMedium,
                                         color = MaterialTheme.colorScheme.error,
                                         fontWeight = FontWeight.Bold
@@ -382,11 +387,11 @@ fun ReaderSheet(
                                     Spacer(modifier = Modifier.height(16.dp))
                                     if (errorMessage!!.contains("API Key")) {
                                         Button(onClick = onOpenSettings) {
-                                            Text("Đi đến Cài đặt")
+                                            Text(appStrings.btnGoToSettings)
                                         }
                                     } else {
                                         OutlinedButton(onClick = { viewModel.clearError() }) {
-                                            Text("Bỏ qua lỗi")
+                                            Text(appStrings.btnIgnoreError)
                                         }
                                     }
                                 }
@@ -399,12 +404,12 @@ fun ReaderSheet(
                                     modifier = Modifier.padding(16.dp)
                                 ) {
                                     Text(
-                                        text = "Không có nội dung dịch.",
+                                        text = appStrings.readerNoContent,
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.outline
                                     )
                                     Text(
-                                        text = "Hãy tải một trang web và nhấn nút Dịch ở góc màn hình.",
+                                        text = appStrings.readerNoContentSub,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.outline,
                                         textAlign = TextAlign.Center
@@ -480,7 +485,7 @@ fun ReaderSheet(
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
                                                 Text(
-                                                    text = "Đang dịch tiếp...",
+                                                    text = appStrings.readerTranslatingMore,
                                                     style = MaterialTheme.typography.bodyMedium,
                                                     color = MaterialTheme.colorScheme.outline
                                                 )
@@ -526,7 +531,7 @@ fun ReaderSheet(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Danh sách bài viết",
+                                    text = appStrings.readerArticleListTitle,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -538,14 +543,14 @@ fun ReaderSheet(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Filled.Add,
-                                            contentDescription = "Tạo thư mục mới",
+                                            contentDescription = appStrings.dialogNewFolderTitle,
                                             tint = MaterialTheme.colorScheme.primary
                                         )
                                     }
                                     if (queue.isNotEmpty() || activeTranslations.isNotEmpty()) {
                                         TextButton(onClick = { viewModel.clearQueue() }) {
                                             Text(
-                                                text = "Xóa tất cả",
+                                                text = appStrings.btnDeleteAll,
                                                 color = MaterialTheme.colorScheme.error
                                             )
                                         }
@@ -590,7 +595,7 @@ fun ReaderSheet(
                                     if (translatingItems.isNotEmpty()) {
                                         item {
                                             Text(
-                                                text = "Đang dịch (${translatingItems.size})",
+                                                text = appStrings.readerTranslatingCount.format(translatingItems.size),
                                                 style = MaterialTheme.typography.titleSmall,
                                                 color = MaterialTheme.colorScheme.primary,
                                                 fontWeight = FontWeight.Bold,
@@ -626,7 +631,7 @@ fun ReaderSheet(
                                                             maxLines = 1
                                                         )
                                                         Text(
-                                                            text = item.currentStep ?: "Đang chuẩn bị dịch...",
+                                                            text = item.currentStep ?: appStrings.readerPreparingTranslation,
                                                             style = MaterialTheme.typography.bodySmall,
                                                             color = MaterialTheme.colorScheme.primary,
                                                             fontWeight = FontWeight.Medium,
@@ -637,7 +642,7 @@ fun ReaderSheet(
                                                     IconButton(onClick = { viewModel.removeActiveTranslation(item.id) }) {
                                                         Icon(
                                                             imageVector = Icons.Filled.Close,
-                                                            contentDescription = "Hủy",
+                                                            contentDescription = appStrings.btnCancel,
                                                             tint = MaterialTheme.colorScheme.outline
                                                         )
                                                     }
@@ -650,7 +655,7 @@ fun ReaderSheet(
                                     if (failedItems.isNotEmpty()) {
                                         item {
                                             Text(
-                                                text = "Dịch lỗi (${failedItems.size})",
+                                                text = appStrings.readerTranslatingFailedCount.format(failedItems.size),
                                                 style = MaterialTheme.typography.titleSmall,
                                                 color = MaterialTheme.colorScheme.error,
                                                 fontWeight = FontWeight.Bold,
@@ -680,7 +685,7 @@ fun ReaderSheet(
                                                             maxLines = 1
                                                         )
                                                         Text(
-                                                            text = item.errorMessage ?: "Lỗi dịch thuật",
+                                                            text = item.errorMessage ?: appStrings.readerErrorTitle,
                                                             style = MaterialTheme.typography.bodySmall,
                                                             color = MaterialTheme.colorScheme.error,
                                                             maxLines = 2
@@ -689,14 +694,14 @@ fun ReaderSheet(
                                                     IconButton(onClick = { viewModel.retryTranslation(item) }) {
                                                         Icon(
                                                             imageVector = Icons.Filled.Refresh,
-                                                            contentDescription = "Thử lại",
+                                                            contentDescription = appStrings.btnRetry,
                                                             tint = MaterialTheme.colorScheme.primary
                                                         )
                                                     }
                                                     IconButton(onClick = { viewModel.removeActiveTranslation(item.id) }) {
                                                         Icon(
                                                             imageVector = Icons.Filled.Close,
-                                                            contentDescription = "Xóa",
+                                                            contentDescription = appStrings.btnDelete,
                                                             tint = MaterialTheme.colorScheme.error
                                                         )
                                                     }
@@ -709,7 +714,7 @@ fun ReaderSheet(
                                     if (folders.isNotEmpty()) {
                                         item {
                                             Text(
-                                                text = "Thư mục (${folders.size})",
+                                                text = appStrings.readerFolderCount.format(folders.size),
                                                 style = MaterialTheme.typography.titleSmall,
                                                 color = MaterialTheme.colorScheme.secondary,
                                                 fontWeight = FontWeight.Bold,
@@ -772,7 +777,7 @@ fun ReaderSheet(
                                         if (rootItems.isNotEmpty()) {
                                             item {
                                                 Text(
-                                                    text = "Mục riêng lẻ (${rootItems.size})",
+                                                    text = appStrings.readerRootItemsCount.format(rootItems.size),
                                                     style = MaterialTheme.typography.titleSmall,
                                                     color = MaterialTheme.colorScheme.secondary,
                                                     fontWeight = FontWeight.Bold,
@@ -805,7 +810,7 @@ fun ReaderSheet(
                                         if (queue.isNotEmpty()) {
                                             item {
                                                 Text(
-                                                    text = "Đã dịch xong (${queue.size})",
+                                                    text = appStrings.readerFinishedCount.format(queue.size),
                                                     style = MaterialTheme.typography.titleSmall,
                                                     color = MaterialTheme.colorScheme.secondary,
                                                     fontWeight = FontWeight.Bold,
@@ -855,7 +860,7 @@ fun ReaderSheet(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Trang đã lưu",
+                                    text = appStrings.readerSavedPagesTitle,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -873,19 +878,19 @@ fun ReaderSheet(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Filled.Bookmark,
-                                            contentDescription = "Chưa có đánh dấu",
+                                            contentDescription = appStrings.readerNoBookmarks,
                                             tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                                             modifier = Modifier.size(48.dp)
                                         )
                                         Spacer(modifier = Modifier.height(12.dp))
                                         Text(
-                                            text = "Không có trang đánh dấu",
+                                            text = appStrings.readerNoBookmarks,
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.outline
                                         )
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Text(
-                                            text = "Bấm biểu tượng Bookmark trên ô địa chỉ để lưu các trang yêu thích của bạn.",
+                                            text = appStrings.readerNoBookmarksSub,
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.outline,
                                             textAlign = TextAlign.Center
@@ -909,7 +914,7 @@ fun ReaderSheet(
                                                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
                                             ),
                                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                                        ) {
+                                            ) {
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
@@ -918,7 +923,7 @@ fun ReaderSheet(
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Filled.Bookmark,
-                                                    contentDescription = "Trang đánh dấu",
+                                                    contentDescription = appStrings.readerTabBookmarks,
                                                     tint = MaterialTheme.colorScheme.primary,
                                                     modifier = Modifier.size(24.dp)
                                                 )
@@ -944,7 +949,7 @@ fun ReaderSheet(
                                                 ) {
                                                     Icon(
                                                         imageVector = Icons.Filled.Close,
-                                                        contentDescription = "Xóa đánh dấu",
+                                                        contentDescription = appStrings.btnDelete,
                                                         tint = MaterialTheme.colorScheme.error
                                                     )
                                                 }
@@ -986,7 +991,7 @@ fun ReaderSheet(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.FastRewind,
-                                contentDescription = "Đoạn trước",
+                                contentDescription = appStrings.ttsRewind,
                                 modifier = Modifier.size(32.dp)
                             )
                         }
@@ -1009,7 +1014,7 @@ fun ReaderSheet(
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                        contentDescription = if (isPlaying) "Tạm dừng" else "Phát",
+                                        contentDescription = if (isPlaying) appStrings.ttsPause else appStrings.ttsPlay,
                                         tint = Color.White,
                                         modifier = Modifier.size(36.dp)
                                     )
@@ -1024,7 +1029,7 @@ fun ReaderSheet(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.FastForward,
-                                contentDescription = "Đoạn kế tiếp",
+                                contentDescription = appStrings.ttsForward,
                                 modifier = Modifier.size(32.dp)
                             )
                         }
@@ -1041,12 +1046,12 @@ fun ReaderSheet(
                 showCreateFolderDialog = false
                 newFolderName = ""
             },
-            title = { Text("Tạo thư mục mới") },
+            title = { Text(appStrings.dialogNewFolderTitle) },
             text = {
                 OutlinedTextField(
                     value = newFolderName,
                     onValueChange = { newFolderName = it },
-                    label = { Text("Tên thư mục") },
+                    label = { Text(appStrings.folderNameLabel) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1061,7 +1066,7 @@ fun ReaderSheet(
                         newFolderName = ""
                     }
                 ) {
-                    Text("Tạo")
+                    Text(appStrings.btnCreate)
                 }
             },
             dismissButton = {
@@ -1071,7 +1076,7 @@ fun ReaderSheet(
                         newFolderName = ""
                     }
                 ) {
-                    Text("Hủy")
+                    Text(appStrings.btnCancel)
                 }
             }
         )
@@ -1083,12 +1088,12 @@ fun ReaderSheet(
                 folderToRename = null
                 renameFolderName = ""
             },
-            title = { Text("Đổi tên thư mục") },
+            title = { Text(appStrings.dialogRenameFolderTitle) },
             text = {
                 OutlinedTextField(
                     value = renameFolderName,
                     onValueChange = { renameFolderName = it },
-                    label = { Text("Tên thư mục mới") },
+                    label = { Text(appStrings.folderRenameLabel) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1104,7 +1109,7 @@ fun ReaderSheet(
                         renameFolderName = ""
                     }
                 ) {
-                    Text("Lưu")
+                    Text(appStrings.btnSave)
                 }
             },
             dismissButton = {
@@ -1114,7 +1119,7 @@ fun ReaderSheet(
                         renameFolderName = ""
                     }
                 ) {
-                    Text("Hủy")
+                    Text(appStrings.btnCancel)
                 }
             }
         )
@@ -1123,8 +1128,8 @@ fun ReaderSheet(
     if (folderToDelete != null) {
         AlertDialog(
             onDismissRequest = { folderToDelete = null },
-            title = { Text("Xóa thư mục") },
-            text = { Text("Bạn có muốn giữ lại các bài viết trong thư mục này (chuyển ra ngoài thư mục gốc) hay xóa tất cả?") },
+            title = { Text(appStrings.dialogDeleteFolderTitle) },
+            text = { Text(appStrings.dialogDeleteFolderPrompt) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -1135,7 +1140,7 @@ fun ReaderSheet(
                         folderToDelete = null
                     }
                 ) {
-                    Text("Giữ lại bài viết")
+                    Text(appStrings.btnKeepArticles)
                 }
             },
             dismissButton = {
@@ -1149,12 +1154,12 @@ fun ReaderSheet(
                             folderToDelete = null
                         }
                     ) {
-                        Text("Xóa tất cả", color = MaterialTheme.colorScheme.error)
+                        Text(appStrings.btnDeleteAll, color = MaterialTheme.colorScheme.error)
                     }
                     TextButton(
                         onClick = { folderToDelete = null }
                     ) {
-                        Text("Hủy")
+                        Text(appStrings.btnCancel)
                     }
                 }
             }
@@ -1165,7 +1170,7 @@ fun ReaderSheet(
         val item = itemToMove!!
         AlertDialog(
             onDismissRequest = { itemToMove = null },
-            title = { Text("Di chuyển bài viết") },
+            title = { Text(appStrings.dialogMoveArticleTitle) },
             text = {
                 Column(
                     modifier = Modifier
@@ -1173,7 +1178,7 @@ fun ReaderSheet(
                         .heightIn(max = 300.dp)
                 ) {
                     Text(
-                        text = "Chọn thư mục đích cho bài viết:\n\"${item.title}\"",
+                        text = appStrings.dialogMoveArticlePrompt.format(item.title),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
@@ -1210,7 +1215,7 @@ fun ReaderSheet(
                                     )
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Text(
-                                        text = "Thư mục gốc",
+                                        text = appStrings.optionRootFolder,
                                         fontWeight = if (item.folderId == null) FontWeight.Bold else FontWeight.Normal
                                     )
                                 }
@@ -1261,7 +1266,7 @@ fun ReaderSheet(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { itemToMove = null }) {
-                    Text("Đóng")
+                    Text(appStrings.btnClose)
                 }
             }
         )
@@ -1384,6 +1389,7 @@ fun FolderRow(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val appStrings = LocalAppStrings.current
     var showFolderMenu by remember { mutableStateOf(false) }
 
     Card(
@@ -1403,13 +1409,13 @@ fun FolderRow(
         ) {
             Icon(
                 imageVector = if (isExpanded) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowRight,
-                contentDescription = if (isExpanded) "Thu gọn" else "Mở rộng",
+                contentDescription = if (isExpanded) appStrings.contentDescriptionCollapse else appStrings.contentDescriptionExpand,
                 tint = MaterialTheme.colorScheme.secondary
             )
             Spacer(modifier = Modifier.width(4.dp))
             Icon(
                 imageVector = Icons.Filled.Folder,
-                contentDescription = "Thư mục",
+                contentDescription = appStrings.folderTitle,
                 tint = MaterialTheme.colorScheme.secondary
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -1421,7 +1427,7 @@ fun FolderRow(
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
                 Text(
-                    text = "$itemCount bài viết",
+                    text = appStrings.folderItemCountTemplate.format(itemCount),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline
                 )
@@ -1430,7 +1436,7 @@ fun FolderRow(
                 IconButton(onClick = { showFolderMenu = true }) {
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
-                        contentDescription = "Tùy chọn thư mục",
+                        contentDescription = appStrings.folderRenameMenu,
                         tint = MaterialTheme.colorScheme.outline
                     )
                 }
@@ -1439,7 +1445,7 @@ fun FolderRow(
                     onDismissRequest = { showFolderMenu = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Đổi tên") },
+                        text = { Text(appStrings.folderRenameMenu) },
                         onClick = {
                             showFolderMenu = false
                             onRename()
@@ -1449,7 +1455,7 @@ fun FolderRow(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Xóa thư mục", color = MaterialTheme.colorScheme.error) },
+                        text = { Text(appStrings.folderDeleteMenu, color = MaterialTheme.colorScheme.error) },
                         onClick = {
                             showFolderMenu = false
                             onDelete()
@@ -1474,6 +1480,7 @@ fun QueueItemCard(
     onMoveClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val appStrings = LocalAppStrings.current
     val containerColor = if (isCurrent) {
         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
     } else {
@@ -1512,7 +1519,7 @@ fun QueueItemCard(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "${item.paragraphs.size} đoạn văn",
+                    text = appStrings.paragraphCountTemplate.format(item.paragraphs.size),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -1523,7 +1530,7 @@ fun QueueItemCard(
             IconButton(onClick = onPlayPause) {
                 Icon(
                     imageVector = if (isCurrent && isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = "Phát",
+                    contentDescription = appStrings.ttsPlay,
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
@@ -1534,7 +1541,7 @@ fun QueueItemCard(
                 IconButton(onClick = { showItemMenu = true }) {
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
-                        contentDescription = "Thêm tùy chọn",
+                        contentDescription = appStrings.contentDescriptionExpand,
                         tint = MaterialTheme.colorScheme.outline
                     )
                 }
@@ -1544,7 +1551,7 @@ fun QueueItemCard(
                     onDismissRequest = { showItemMenu = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Di chuyển vào thư mục") },
+                        text = { Text(appStrings.queueItemMoveMenu) },
                         onClick = {
                             showItemMenu = false
                             onMoveClick()
@@ -1554,7 +1561,7 @@ fun QueueItemCard(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Xóa", color = MaterialTheme.colorScheme.error) },
+                        text = { Text(appStrings.btnDelete, color = MaterialTheme.colorScheme.error) },
                         onClick = {
                             showItemMenu = false
                             onRemove()

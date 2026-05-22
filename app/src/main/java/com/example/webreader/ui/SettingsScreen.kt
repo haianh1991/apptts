@@ -72,6 +72,39 @@ import androidx.compose.ui.draw.clip
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.ApiException
 
+fun getLocalizedLanguageName(lang: String, displayLang: String): String {
+    return when (displayLang) {
+        "en" -> when (lang) {
+            "Auto" -> "Auto Detect"
+            "Tiếng Trung" -> "Chinese"
+            "Tiếng Anh" -> "English"
+            "Tiếng Nhật" -> "Japanese"
+            "Tiếng Hàn" -> "Korean"
+            "Tiếng Việt" -> "Vietnamese"
+            "Tiếng Pháp" -> "French"
+            "Tiếng Đức" -> "German"
+            "Tiếng Tây Ban Nha" -> "Spanish"
+            else -> lang
+        }
+        "zh" -> when (lang) {
+            "Auto" -> "自动检测"
+            "Tiếng Trung" -> "中文"
+            "Tiếng Anh" -> "英文"
+            "Tiếng Nhật" -> "日文"
+            "Tiếng Hàn" -> "韩文"
+            "Tiếng Việt" -> "越南文"
+            "Tiếng Pháp" -> "法文"
+            "Tiếng Đức" -> "德文"
+            "Tiếng Tây Ban Nha" -> "西班牙文"
+            else -> lang
+        }
+        else -> when (lang) {
+            "Auto" -> "Auto (Tự động phát hiện)"
+            else -> lang
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -79,6 +112,8 @@ fun SettingsScreen(
     onBackClick: () -> Unit
 ) {
     val settings = viewModel.settings
+    val appStrings = LocalAppStrings.current
+    val displayLang by viewModel.appDisplayLanguage.collectAsState()
 
     var apiKey by remember { mutableStateOf(settings.geminiApiKey) }
     var selectedModel by remember { mutableStateOf(settings.geminiModel) }
@@ -99,7 +134,7 @@ fun SettingsScreen(
 
     val availableEngines = remember { viewModel.ttsManager.getAvailableTtsEngines() }
     val activeEngineLabel = availableEngines.find { it.name == selectedEngine }?.label 
-        ?: if (selectedEngine == "com.google.android.tts") "Google TTS (Buộc kích hoạt)" else selectedEngine.ifBlank { "Mặc định hệ thống" }
+        ?: if (selectedEngine == "com.google.android.tts") appStrings.ttsGoogleEngineForce else selectedEngine.ifBlank { appStrings.ttsDefaultEngine }
 
     val models = listOf(
         "gemini-3.5-flash",
@@ -112,10 +147,10 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Cài đặt ứng dụng") },
+                title = { Text(appStrings.settingsTitle) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = appStrings.btnCancel)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -149,17 +184,18 @@ fun SettingsScreen(
                             viewModel.signInWithGoogle(
                                 idToken = idToken,
                                 onSuccess = {
-                                    android.widget.Toast.makeText(context, "Đăng nhập thành công!", android.widget.Toast.LENGTH_SHORT).show()
+                                    android.widget.Toast.makeText(context, appStrings.toastLoginSuccess, android.widget.Toast.LENGTH_SHORT).show()
                                 },
                                 onError = { error ->
-                                    android.widget.Toast.makeText(context, "Đăng nhập thất bại: $error", android.widget.Toast.LENGTH_LONG).show()
+                                    android.widget.Toast.makeText(context, "${appStrings.toastLoginFailed}$error", android.widget.Toast.LENGTH_LONG).show()
                                 }
                             )
                         } else {
-                            android.widget.Toast.makeText(context, "Không nhận được ID Token từ Google", android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(context, appStrings.toastNoGoogleToken, android.widget.Toast.LENGTH_SHORT).show()
                         }
                     } catch (e: ApiException) {
-                        android.widget.Toast.makeText(context, "Đăng nhập thất bại (Mã lỗi: ${e.statusCode})", android.widget.Toast.LENGTH_LONG).show()
+                        val errorMsg = String.format(appStrings.toastLoginFailedCode, e.statusCode.toString())
+                        android.widget.Toast.makeText(context, errorMsg, android.widget.Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -174,7 +210,7 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Tài khoản người dùng",
+                        text = appStrings.accountCardTitle,
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
@@ -214,12 +250,12 @@ fun SettingsScreen(
 
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = user.displayName ?: "Người dùng Web Reader",
+                                    text = user.displayName ?: appStrings.accountLoggedAs,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = user.email ?: "Không có email",
+                                    text = user.email ?: appStrings.accountNoEmail,
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -243,10 +279,10 @@ fun SettingsScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Delete,
-                                contentDescription = "Đăng xuất"
+                                contentDescription = appStrings.accountLogoutButton
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Đăng xuất tài khoản")
+                            Text(appStrings.accountLogoutButton)
                         }
                     } else {
                         // Trạng thái chưa đăng nhập
@@ -256,7 +292,7 @@ fun SettingsScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "Đăng nhập bằng Google để đồng bộ cài đặt và theo dõi quyền lợi người dùng.",
+                                text = appStrings.accountLoginSyncPrompt,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -285,11 +321,77 @@ fun SettingsScreen(
                                     color = MaterialTheme.colorScheme.primary
                                 )
                                 Text(
-                                    text = "Đăng nhập bằng tài khoản Google",
+                                    text = appStrings.loginGoogleButton,
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
+                        }
+                    }
+                }
+            }
+
+            // Card Ngôn ngữ hiển thị
+            var isLangDropdownExpanded by remember { mutableStateOf(false) }
+            
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = appStrings.settingsDisplayLanguage,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    ExposedDropdownMenuBox(
+                        expanded = isLangDropdownExpanded,
+                        onExpandedChange = { isLangDropdownExpanded = !isLangDropdownExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = when (displayLang) {
+                                "en" -> appStrings.settingsDisplayLanguageEn
+                                "zh" -> appStrings.settingsDisplayLanguageZh
+                                else -> appStrings.settingsDisplayLanguageVi
+                            },
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text(appStrings.settingsDisplayLanguageLabel) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isLangDropdownExpanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = isLangDropdownExpanded,
+                            onDismissRequest = { isLangDropdownExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(appStrings.settingsDisplayLanguageVi) },
+                                onClick = {
+                                    viewModel.setAppDisplayLanguage("vi")
+                                    isLangDropdownExpanded = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(appStrings.settingsDisplayLanguageEn) },
+                                onClick = {
+                                    viewModel.setAppDisplayLanguage("en")
+                                    isLangDropdownExpanded = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(appStrings.settingsDisplayLanguageZh) },
+                                onClick = {
+                                    viewModel.setAppDisplayLanguage("zh")
+                                    isLangDropdownExpanded = false
+                                }
+                            )
                         }
                     }
                 }
@@ -305,16 +407,17 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Cấu hình Gemini API",
+                        text = appStrings.geminiCardTitle,
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
                     )
 
                     OutlinedTextField(
                         value = apiKey,
                         onValueChange = { apiKey = it },
-                        label = { Text("Gemini API Key") },
-                        placeholder = { Text("Dán các API key tại đây, cách nhau bởi dấu phẩy hoặc dòng mới") },
+                        label = { Text(appStrings.geminiApiKeyLabel) },
+                        placeholder = { Text(appStrings.geminiApiKeyPlaceholder) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = false,
                         maxLines = 4,
@@ -323,7 +426,19 @@ fun SettingsScreen(
                             IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
                                 Icon(
                                     imageVector = if (apiKeyVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
-                                    contentDescription = if (apiKeyVisible) "Ẩn API Key" else "Hiện API Key"
+                                    contentDescription = if (apiKeyVisible) {
+                                        when (displayLang) {
+                                            "en" -> "Hide API Key"
+                                            "zh" -> "隐藏 API Key"
+                                            else -> "Ẩn API Key"
+                                        }
+                                    } else {
+                                        when (displayLang) {
+                                            "en" -> "Show API Key"
+                                            "zh" -> "显示 API Key"
+                                            else -> "Hiện API Key"
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -344,14 +459,14 @@ fun SettingsScreen(
                                 modifier = Modifier.padding(end = 8.dp)
                             )
                             Text(
-                                text = "Hỗ trợ nhiều khóa API để tự động xoay vòng khi có lỗi.",
+                                text = appStrings.geminiApiKeyInfo1,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline,
                                 fontWeight = FontWeight.Medium
                             )
                         }
                         Text(
-                            text = "Lấy khóa API miễn phí từ Google AI Studio. Có thể dán danh sách khóa cách nhau bởi dấu phẩy hoặc ngắt dòng.",
+                            text = appStrings.geminiApiKeyInfo2,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.outline,
                             modifier = Modifier.padding(start = 28.dp)
@@ -369,7 +484,7 @@ fun SettingsScreen(
                             value = selectedModel,
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Mô hình AI") },
+                            label = { Text(appStrings.geminiModelLabel) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDropdownExpanded) },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -403,9 +518,10 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Cấu hình Dịch thuật",
+                        text = appStrings.transCardTitle,
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
                     )
 
                     // Dropdown chọn Ngôn ngữ nguồn
@@ -414,10 +530,10 @@ fun SettingsScreen(
                         onExpandedChange = { isSourceDropdownExpanded = !isSourceDropdownExpanded }
                     ) {
                         OutlinedTextField(
-                            value = if (sourceLanguage == "Auto") "Auto (Tự động phát hiện)" else sourceLanguage,
+                            value = getLocalizedLanguageName(sourceLanguage, displayLang),
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Ngôn ngữ nguồn") },
+                            label = { Text(appStrings.transSourceLabel) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isSourceDropdownExpanded) },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -439,7 +555,7 @@ fun SettingsScreen(
                                 "Tiếng Tây Ban Nha"
                             )
                             sourceLanguages.forEach { lang ->
-                                val displayText = if (lang == "Auto") "Auto (Tự động phát hiện)" else lang
+                                val displayText = getLocalizedLanguageName(lang, displayLang)
                                 DropdownMenuItem(
                                     text = { Text(displayText) },
                                     onClick = {
@@ -457,10 +573,10 @@ fun SettingsScreen(
                         onExpandedChange = { isTargetDropdownExpanded = !isTargetDropdownExpanded }
                     ) {
                         OutlinedTextField(
-                            value = targetLanguage,
+                            value = getLocalizedLanguageName(targetLanguage, displayLang),
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Ngôn ngữ đích") },
+                            label = { Text(appStrings.transTargetLabel) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isTargetDropdownExpanded) },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -481,7 +597,7 @@ fun SettingsScreen(
                             )
                             targetLanguages.forEach { lang ->
                                 DropdownMenuItem(
-                                    text = { Text(lang) },
+                                    text = { Text(getLocalizedLanguageName(lang, displayLang)) },
                                     onClick = {
                                         targetLanguage = lang
                                         isTargetDropdownExpanded = false
@@ -495,8 +611,8 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = customInstructions,
                         onValueChange = { customInstructions = it },
-                        label = { Text("Chỉ dẫn dịch thuật cá nhân hóa") },
-                        placeholder = { Text("Ví dụ: Giữ nguyên cách xưng hô Hán-Việt...") },
+                        label = { Text(appStrings.transInstructionsLabel) },
+                        placeholder = { Text(appStrings.transInstructionsPlaceholder) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = false,
                         maxLines = 6,
@@ -509,7 +625,7 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Thêm các yêu cầu riêng cho AI khi dịch.",
+                            text = appStrings.transInstructionsHelp,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.outline,
                             modifier = Modifier.weight(1f)
@@ -521,11 +637,11 @@ fun SettingsScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Refresh,
-                                contentDescription = "Khôi phục mặc định",
+                                contentDescription = appStrings.btnRestoreDefault,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Khôi phục mặc định", style = MaterialTheme.typography.labelMedium)
+                            Text(appStrings.btnRestoreDefault, style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
@@ -541,9 +657,10 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Cài đặt giọng đọc (TTS)",
+                        text = appStrings.ttsCardTitle,
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
                     )
 
                     // Dropdown chọn Công cụ TTS
@@ -555,7 +672,7 @@ fun SettingsScreen(
                             value = activeEngineLabel,
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Công cụ giọng đọc (TTS Engine)") },
+                            label = { Text(appStrings.ttsEngineLabel) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isEngineDropdownExpanded) },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -566,7 +683,7 @@ fun SettingsScreen(
                             onDismissRequest = { isEngineDropdownExpanded = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Mặc định hệ thống") },
+                                text = { Text(appStrings.ttsDefaultEngine) },
                                 onClick = {
                                     selectedEngine = ""
                                     isEngineDropdownExpanded = false
@@ -576,7 +693,7 @@ fun SettingsScreen(
                             val hasGoogleTts = availableEngines.any { it.name == "com.google.android.tts" }
                             if (!hasGoogleTts) {
                                 DropdownMenuItem(
-                                    text = { Text("Google TTS (Buộc kích hoạt)") },
+                                    text = { Text(appStrings.ttsGoogleEngineForce) },
                                     onClick = {
                                         selectedEngine = "com.google.android.tts"
                                         isEngineDropdownExpanded = false
@@ -602,12 +719,17 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            val speedRestoreDesc = when (displayLang) {
+                                "en" -> "Restore speed"
+                                "zh" -> "恢复语速"
+                                else -> "Khôi phục tốc độ"
+                            }
                             Text(
-                                text = "Tốc độ đọc: ${String.format("%.1fx", ttsSpeed)}",
+                                text = "${appStrings.ttsSpeedLabel}: ${String.format("%.1fx", ttsSpeed)}",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             IconButton(onClick = { ttsSpeed = 1.0f }) {
-                                Icon(Icons.Filled.Refresh, contentDescription = "Khôi phục tốc độ")
+                                Icon(Icons.Filled.Refresh, contentDescription = speedRestoreDesc)
                             }
                         }
                         Slider(
@@ -625,12 +747,17 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            val pitchRestoreDesc = when (displayLang) {
+                                "en" -> "Restore pitch"
+                                "zh" -> "恢复音调"
+                                else -> "Khôi phục cao độ"
+                            }
                             Text(
-                                text = "Cao độ giọng: ${String.format("%.1fx", ttsPitch)}",
+                                text = "${appStrings.ttsPitchLabel}: ${String.format("%.1fx", ttsPitch)}",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             IconButton(onClick = { ttsPitch = 1.0f }) {
-                                Icon(Icons.Filled.Refresh, contentDescription = "Khôi phục cao độ")
+                                Icon(Icons.Filled.Refresh, contentDescription = pitchRestoreDesc)
                             }
                         }
                         Slider(
@@ -645,7 +772,7 @@ fun SettingsScreen(
                     OutlinedButton(
                         onClick = {
                             viewModel.ttsManager.speak(
-                                "Xin chào, đây là giọng đọc thử tiếng Việt trên ứng dụng của bạn.",
+                                appStrings.ttsTestText,
                                 -999, // ID đặc biệt để thử giọng
                                 ttsSpeed,
                                 ttsPitch
@@ -653,9 +780,9 @@ fun SettingsScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Filled.PlayArrow, contentDescription = "Chạy thử")
+                        Icon(Icons.Filled.PlayArrow, contentDescription = appStrings.btnTtsTest)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Nghe thử giọng đọc Tiếng Việt")
+                        Text(appStrings.btnTtsTest)
                     }
                 }
             }
@@ -685,13 +812,14 @@ fun SettingsScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.History,
-                                contentDescription = "Lịch sử dịch",
+                                contentDescription = appStrings.logsCardTitle,
                                 tint = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "Nhật ký dịch thuật",
+                                text = appStrings.logsCardTitle,
                                 style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
                             )
                         }
 
@@ -702,7 +830,7 @@ fun SettingsScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.Delete,
-                                    contentDescription = "Xóa tất cả nhật ký",
+                                    contentDescription = appStrings.btnClearAllHistory,
                                     tint = MaterialTheme.colorScheme.error
                                 )
                             }
@@ -711,7 +839,7 @@ fun SettingsScreen(
 
                     if (translationLogs.isEmpty()) {
                         Text(
-                            text = "Chưa có nhật ký dịch thuật nào.",
+                            text = appStrings.logsEmpty,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.outline,
                             modifier = Modifier.padding(vertical = 8.dp)
@@ -725,27 +853,43 @@ fun SettingsScreen(
                                     log = log,
                                     sdf = sdf,
                                     onCopyClick = {
+                                        val displayTypeLog = when (log.type) {
+                                            "Đọc ngay" -> appStrings.btnReadNow
+                                            "Hàng chờ" -> appStrings.readerTabQueue
+                                            else -> log.type
+                                        }
+                                        val displayStatusLog = when (log.status) {
+                                            "Thành công" -> appStrings.statusSuccess
+                                            "Đang chạy" -> appStrings.statusRunning
+                                            "Thất bại" -> appStrings.statusFailed
+                                            else -> log.status
+                                        }
+                                        val logArticleLabel = when (displayLang) {
+                                            "en" -> "Article"
+                                            "zh" -> "文章"
+                                            else -> "Bài viết"
+                                        }
                                         val logDetail = """
-                                            --- NHẬT KÝ DỊCH THUẬT ---
+                                            ${appStrings.logDetailTitle}
                                             ID: ${log.id}
-                                            Thời gian: ${sdf.format(Date(log.timestamp))}
-                                            Loại dịch: ${log.type}
-                                            Bài viết: ${log.title}
-                                            URL: ${log.url}
-                                            Trạng thái: ${log.status}
-                                            Khóa API đã dùng: ${log.usedApiKeys.joinToString(", ")}
+                                            ${appStrings.logTime}: ${sdf.format(Date(log.timestamp))}
+                                            ${appStrings.logType}: $displayTypeLog
+                                            $logArticleLabel: ${log.title}
+                                            ${appStrings.logUrl}: ${log.url}
+                                            ${appStrings.logStatus}: $displayStatusLog
+                                            ${appStrings.logUsedKeys}: ${log.usedApiKeys.joinToString(", ")}
                                             
-                                            Tiến trình chi tiết:
+                                            ${appStrings.logDetailedProgress}
                                             ${log.steps.mapIndexed { idx, step -> "${idx + 1}. $step" }.joinToString("\n")}
                                             
-                                            ${if (log.status == "Thành công") "Phản hồi dịch từ Gemini:" else if (log.status == "Đang chạy") "Chi tiết trạng thái:" else "Chi tiết lỗi:"}
-                                            ${if (log.status == "Thành công") log.geminiResponse else if (log.status == "Đang chạy") "Đang tiến hành dịch thuật..." else log.errorMessage}
+                                            ${if (log.status == "Thành công") appStrings.logResponseSuccess else if (log.status == "Đang chạy") appStrings.logResponseRunning else appStrings.logResponseFailed}
+                                            ${if (log.status == "Thành công") log.geminiResponse else if (log.status == "Đang chạy") "..." else log.errorMessage}
                                             -------------------------
                                         """.trimIndent()
                                         clipboardManager.setText(AnnotatedString(logDetail))
                                         android.widget.Toast.makeText(
                                             viewModel.getApplication(),
-                                            "Đã sao chép nhật ký vào Clipboard",
+                                            appStrings.toastLogsCopied,
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     }
@@ -775,9 +919,9 @@ fun SettingsScreen(
                     .fillMaxWidth()
                     .height(50.dp)
             ) {
-                Icon(Icons.Filled.Save, contentDescription = "Lưu")
+                Icon(Icons.Filled.Save, contentDescription = appStrings.btnSaveSettings)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Lưu thiết lập")
+                Text(appStrings.btnSaveSettings)
             }
         }
     }
@@ -790,6 +934,12 @@ fun TransactionLogItem(
     onCopyClick: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val appStrings = LocalAppStrings.current
+    val displayLang = when (appStrings) {
+        is EnAppStrings -> "en"
+        is ZhAppStrings -> "zh"
+        else -> "vi"
+    }
 
     Card(
         modifier = Modifier
@@ -822,7 +972,11 @@ fun TransactionLogItem(
                         colors = CardDefaults.cardColors(containerColor = typeBg)
                     ) {
                         Text(
-                            text = log.type,
+                            text = when (log.type) {
+                                "Đọc ngay" -> appStrings.btnReadNow
+                                "Hàng chờ" -> appStrings.readerTabQueue
+                                else -> log.type
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             fontWeight = FontWeight.Bold,
@@ -845,7 +999,12 @@ fun TransactionLogItem(
                         colors = CardDefaults.cardColors(containerColor = statusBg)
                     ) {
                         Text(
-                            text = log.status,
+                            text = when (log.status) {
+                                "Thành công" -> appStrings.statusSuccess
+                                "Đang chạy" -> appStrings.statusRunning
+                                "Thất bại" -> appStrings.statusFailed
+                                else -> log.status
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             fontWeight = FontWeight.Bold,
@@ -865,9 +1024,22 @@ fun TransactionLogItem(
                     onClick = { expanded = !expanded },
                     modifier = Modifier.size(24.dp)
                 ) {
+                    val expandCollapseDesc = if (expanded) {
+                        when (displayLang) {
+                            "en" -> "Collapse"
+                            "zh" -> "收起"
+                            else -> "Thu gọn"
+                        }
+                    } else {
+                        when (displayLang) {
+                            "en" -> "Expand"
+                            "zh" -> "展开"
+                            else -> "Mở rộng"
+                        }
+                    }
                     Icon(
                         imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                        contentDescription = if (expanded) "Thu gọn" else "Mở rộng"
+                        contentDescription = expandCollapseDesc
                     )
                 }
             }
@@ -878,8 +1050,13 @@ fun TransactionLogItem(
                     .fillMaxWidth()
                     .clickable { expanded = !expanded }
             ) {
+                val noTitleText = when (displayLang) {
+                    "en" -> "No Title"
+                    "zh" -> "无标题"
+                    else -> "Không có tiêu đề"
+                }
                 Text(
-                    text = log.title.ifBlank { "Không có tiêu đề" },
+                    text = log.title.ifBlank { noTitleText },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
@@ -906,7 +1083,7 @@ fun TransactionLogItem(
                 // API Keys
                 if (log.usedApiKeys.isNotEmpty()) {
                     Text(
-                        text = "Khóa API đã dùng: " + log.usedApiKeys.joinToString(", "),
+                        text = appStrings.logUsedKeys + ": " + log.usedApiKeys.joinToString(", "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -915,7 +1092,7 @@ fun TransactionLogItem(
                 // Steps
                 if (log.steps.isNotEmpty()) {
                     Text(
-                        text = "Tiến trình chi tiết:",
+                        text = appStrings.logDetailedProgress,
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -939,15 +1116,21 @@ fun TransactionLogItem(
                 val isSuccess = log.status == "Thành công"
                 val isRunning = log.status == "Đang chạy"
                 val detailTitle = when (log.status) {
-                    "Thành công" -> "Phản hồi dịch từ Gemini:"
-                    "Đang chạy" -> "Chi tiết trạng thái:"
-                    else -> "Chi tiết lỗi:"
+                    "Thành công" -> appStrings.logResponseSuccess
+                    "Đang chạy" -> appStrings.logResponseRunning
+                    else -> appStrings.logResponseFailed
                 }
                 val detailText = when (log.status) {
                     "Thành công" -> log.geminiResponse
-                    "Đang chạy" -> "Đang tiến hành dịch thuật..."
+                    "Đang chạy" -> {
+                        when (displayLang) {
+                            "en" -> "Translating..."
+                            "zh" -> "正在翻译..."
+                            else -> "Đang tiến hành dịch thuật..."
+                        }
+                    }
                     else -> log.errorMessage
-                } ?: "Không có dữ liệu"
+                } ?: "No data"
                 val detailBoxBg = when (log.status) {
                     "Thành công" -> MaterialTheme.colorScheme.surface
                     "Đang chạy" -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
@@ -996,6 +1179,11 @@ fun TransactionLogItem(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
+                    val copyLogDesc = when (displayLang) {
+                        "en" -> "Copy log details"
+                        "zh" -> "复制日志详情"
+                        else -> "Sao chép nhật ký"
+                    }
                     OutlinedButton(
                         onClick = onCopyClick,
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
@@ -1003,11 +1191,11 @@ fun TransactionLogItem(
                     ) {
                         Icon(
                             imageVector = Icons.Filled.ContentCopy,
-                            contentDescription = "Sao chép",
+                            contentDescription = copyLogDesc,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Sao chép nhật ký", style = MaterialTheme.typography.labelMedium)
+                        Text(copyLogDesc, style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }

@@ -111,6 +111,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private val _showReaderSheet = MutableStateFlow(false)
     val showReaderSheet: StateFlow<Boolean> = _showReaderSheet
 
+    private val _appDisplayLanguage = MutableStateFlow(settings.appDisplayLanguage)
+    val appDisplayLanguage: StateFlow<String> = _appDisplayLanguage
+
+    fun setAppDisplayLanguage(lang: String) {
+        settings.appDisplayLanguage = lang
+        _appDisplayLanguage.value = lang
+    }
+
     // App Update flows
     private val _updateInfo = MutableStateFlow<AppUpdateInfo?>(null)
     val updateInfo: StateFlow<AppUpdateInfo?> = _updateInfo

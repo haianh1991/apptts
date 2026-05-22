@@ -90,6 +90,7 @@ fun BrowserScreen(
     viewModel: BrowserViewModel,
     onOpenSettings: () -> Unit
 ) {
+    val appStrings = LocalAppStrings.current
     val currentUrl by viewModel.url.collectAsState()
     val isLoadingPage by viewModel.isLoading.collectAsState()
     val canGoBack by viewModel.canGoBack.collectAsState()
@@ -148,7 +149,7 @@ fun BrowserScreen(
                     if (isAddressBarFocused) {
                         // Nút Back để hủy focus và thoát chế độ nhập URL (tương tự Chrome)
                         IconButton(onClick = { focusManager.clearFocus() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Hủy nhập")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = appStrings.contentDescriptionBack)
                         }
                     }
 
@@ -179,7 +180,7 @@ fun BrowserScreen(
                         trailingIcon = if (isAddressBarFocused && urlInputText.isNotEmpty()) {
                             {
                                 IconButton(onClick = { urlInputText = "" }) {
-                                    Icon(Icons.Filled.Close, contentDescription = "Xóa")
+                                    Icon(Icons.Filled.Close, contentDescription = appStrings.contentDescriptionClear)
                                 }
                             }
                         } else {
@@ -218,13 +219,13 @@ fun BrowserScreen(
                                 onDismissRequest = { showMenu = false }
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Tải lại trang") },
+                                    text = { Text(appStrings.browserMenuReload) },
                                     onClick = {
                                         showMenu = false
                                         webViewInstance?.reload()
                                     },
                                     leadingIcon = {
-                                        Icon(Icons.Filled.Refresh, contentDescription = "Tải lại")
+                                        Icon(Icons.Filled.Refresh, contentDescription = appStrings.browserMenuReload)
                                     }
                                 )
                                 val currentWebViewUrl = webViewInstance?.url ?: currentUrl
@@ -232,7 +233,7 @@ fun BrowserScreen(
                                 val hasTranslateHash = currentWebViewUrl.contains("#googtrans(auto|vi)")
                                 val isTranslated = hasTranslateCookie || hasTranslateHash
 
-                                val menuText = if (isTranslated) "Xem trang gốc" else "Dịch trang web"
+                                val menuText = if (isTranslated) appStrings.browserMenuViewOriginal else appStrings.browserMenuTranslate
                                 val menuIcon = if (isTranslated) Icons.Filled.Close else Icons.Filled.Translate
 
                                 DropdownMenuItem(
@@ -244,7 +245,7 @@ fun BrowserScreen(
                                         cookieManager.setAcceptThirdPartyCookies(webViewInstance, true)
                                         
                                         if (isTranslated) {
-                                            android.widget.Toast.makeText(context, "Đang tải lại trang gốc...", android.widget.Toast.LENGTH_SHORT).show()
+                                            android.widget.Toast.makeText(context, appStrings.toastReloadingOriginal, android.widget.Toast.LENGTH_SHORT).show()
                                             cookieManager.setCookie(currentWebViewUrl, "googtrans=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT")
                                             try {
                                                 val uri = android.net.Uri.parse(currentWebViewUrl)
@@ -267,7 +268,7 @@ fun BrowserScreen(
                                             }
                                             webViewInstance?.loadUrl(cleanUrl)
                                         } else {
-                                            android.widget.Toast.makeText(context, "Đang dịch trang web sang Tiếng Việt...", android.widget.Toast.LENGTH_SHORT).show()
+                                            android.widget.Toast.makeText(context, appStrings.toastTranslatingToVietnamese, android.widget.Toast.LENGTH_SHORT).show()
                                             cookieManager.setCookie(currentWebViewUrl, "googtrans=/auto/vi; path=/")
                                             try {
                                                 val uri = android.net.Uri.parse(currentWebViewUrl)
@@ -298,13 +299,13 @@ fun BrowserScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Cài đặt") },
+                                    text = { Text(appStrings.browserMenuSettings) },
                                     onClick = {
                                         showMenu = false
                                         onOpenSettings()
                                     },
                                     leadingIcon = {
-                                        Icon(Icons.Filled.Settings, contentDescription = "Cài đặt")
+                                        Icon(Icons.Filled.Settings, contentDescription = appStrings.browserMenuSettings)
                                     }
                                 )
                             }
@@ -544,7 +545,7 @@ fun BrowserScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Translate,
-                            contentDescription = "Dịch & Đọc",
+                            contentDescription = appStrings.browserMenuTranslate,
                             modifier = Modifier.size(28.dp)
                         )
                     }
@@ -554,18 +555,18 @@ fun BrowserScreen(
             if (showModeDialog) {
                 AlertDialog(
                     onDismissRequest = { showModeDialog = false },
-                    title = { Text(text = "Lựa chọn chế độ đọc", fontWeight = FontWeight.Bold) },
+                    title = { Text(text = appStrings.dialogReaderTitle, fontWeight = FontWeight.Bold) },
                     text = {
                         Column {
                             Text(
-                                text = "Bạn muốn dịch và nghe trang này ngay lập tức, hay dịch dưới nền và thêm vào hàng chờ để nghe liên tục?",
+                                text = appStrings.dialogReaderPrompt,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             
                             Text(
-                                text = "Lưu vào thư mục:",
+                                text = appStrings.saveToFolderLabel,
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -576,9 +577,9 @@ fun BrowserScreen(
                             var dropdownExpanded by remember { mutableStateOf(false) }
                             
                             val selectedFolderName = if (selectedFolderId == null) {
-                                "Thư mục gốc"
+                                appStrings.optionRootFolder
                             } else {
-                                folders.find { it.id == selectedFolderId }?.name ?: "Thư mục gốc"
+                                folders.find { it.id == selectedFolderId }?.name ?: appStrings.optionRootFolder
                             }
                             
                             Box {
@@ -617,7 +618,7 @@ fun BrowserScreen(
                                     modifier = Modifier.fillMaxWidth(0.7f)
                                 ) {
                                     DropdownMenuItem(
-                                        text = { Text("Thư mục gốc") },
+                                        text = { Text(appStrings.optionRootFolder) },
                                         leadingIcon = {
                                             Icon(Icons.Filled.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
                                         },
@@ -643,7 +644,7 @@ fun BrowserScreen(
                                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                                     
                                     DropdownMenuItem(
-                                        text = { Text("Tạo thư mục mới...") },
+                                        text = { Text(appStrings.optionCreateNewFolder) },
                                         leadingIcon = {
                                             Icon(Icons.Filled.Add, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
                                         },
@@ -663,7 +664,7 @@ fun BrowserScreen(
                                 viewModel.translateWebpage(extractedTextForQueue, capturedTitleForQueue, capturedUrlForQueue, selectedFolderId)
                             }
                         ) {
-                            Text("Đọc ngay")
+                            Text(appStrings.btnReadNow)
                         }
                     },
                     dismissButton = {
@@ -674,11 +675,11 @@ fun BrowserScreen(
                                     viewModel.translateAndAddToQueue(extractedTextForQueue, capturedTitleForQueue, capturedUrlForQueue, selectedFolderId)
                                 }
                             ) {
-                                Text("Thêm vào hàng chờ")
+                                Text(appStrings.btnAddToQueue)
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             TextButton(onClick = { showModeDialog = false }) {
-                                Text("Hủy")
+                                Text(appStrings.btnCancel)
                             }
                         }
                     }
@@ -691,12 +692,12 @@ fun BrowserScreen(
                         showCreateFolderDialogInTranslation = false
                         newFolderNameInTranslation = ""
                     },
-                    title = { Text("Tạo thư mục mới") },
+                    title = { Text(appStrings.dialogNewFolderTitle) },
                     text = {
                         OutlinedTextField(
                             value = newFolderNameInTranslation,
                             onValueChange = { newFolderNameInTranslation = it },
-                            label = { Text("Tên thư mục") },
+                            label = { Text(appStrings.folderNameLabel) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -713,7 +714,7 @@ fun BrowserScreen(
                                 newFolderNameInTranslation = ""
                             }
                         ) {
-                            Text("Tạo")
+                            Text(appStrings.btnCreate)
                         }
                     },
                     dismissButton = {
@@ -723,7 +724,7 @@ fun BrowserScreen(
                                 newFolderNameInTranslation = ""
                             }
                         ) {
-                            Text("Hủy")
+                            Text(appStrings.btnCancel)
                         }
                     }
                 )
@@ -772,20 +773,20 @@ fun BrowserScreen(
                     ),
                     title = {
                         Text(
-                            text = if (isForceUpdate) "Yêu cầu cập nhật bắt buộc" else "Đã có phiên bản mới",
+                            text = if (isForceUpdate) appStrings.updateDialogForceTitle else appStrings.updateDialogTitle,
                             fontWeight = FontWeight.Bold
                         )
                     },
                     text = {
                         Column {
                             Text(
-                                text = "Ứng dụng ${updateInfo?.versionName} đã sẵn sàng để tải xuống.",
+                                text = String.format(appStrings.updateDialogMessageTemplate, updateInfo?.versionName ?: ""),
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             if (updateInfo?.releaseNotes?.isNotEmpty() == true) {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "Nhật ký thay đổi:",
+                                    text = appStrings.updateDialogReleaseNotes,
                                     fontWeight = FontWeight.SemiBold,
                                     style = MaterialTheme.typography.bodySmall
                                 )
@@ -804,7 +805,7 @@ fun BrowserScreen(
                                 context.startActivity(intent)
                             }
                         ) {
-                            Text("Cập nhật ngay")
+                            Text(appStrings.btnUpdateNow)
                         }
                     },
                     dismissButton = if (!isForceUpdate) {
@@ -812,7 +813,7 @@ fun BrowserScreen(
                             TextButton(
                                 onClick = { viewModel.dismissUpdateDialog() }
                             ) {
-                                Text("Để sau")
+                                Text(appStrings.btnUpdateLater)
                             }
                         }
                     } else null
