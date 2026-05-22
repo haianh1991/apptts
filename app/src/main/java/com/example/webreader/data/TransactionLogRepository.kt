@@ -29,7 +29,12 @@ class TransactionLogRepository(private val context: Context) {
 
     suspend fun addLog(log: TransactionLog) = withContext(Dispatchers.IO) {
         val currentLogs = getLogs().toMutableList()
-        currentLogs.add(0, log) // Thêm lên đầu (mới nhất)
+        val index = currentLogs.indexOfFirst { it.id == log.id }
+        if (index != -1) {
+            currentLogs[index] = log
+        } else {
+            currentLogs.add(0, log) // Thêm lên đầu (mới nhất)
+        }
         
         // Giới hạn 50 log
         val trimmedLogs = if (currentLogs.size > 50) currentLogs.take(50) else currentLogs

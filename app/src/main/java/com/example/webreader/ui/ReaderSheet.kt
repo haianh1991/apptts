@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -76,6 +77,7 @@ fun ReaderSheet(
 ) {
     val isTranslating by viewModel.isTranslating.collectAsState()
     val foregroundTranslationStep by viewModel.foregroundTranslationStep.collectAsState()
+    val foregroundTranslationSteps by viewModel.foregroundTranslationSteps.collectAsState()
     val paragraphs by viewModel.paragraphs.collectAsState()
     val currentIndex by viewModel.currentParagraphIndex.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
@@ -236,31 +238,95 @@ fun ReaderSheet(
                                     verticalArrangement = Arrangement.Center
                                 ) {
                                     CircularProgressIndicator(
-                                        modifier = Modifier.size(50.dp),
+                                        modifier = Modifier.size(40.dp),
                                         color = MaterialTheme.colorScheme.primary
                                     )
-                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Spacer(modifier = Modifier.height(12.dp))
                                     Text(
                                         text = "Đang dịch trang web bằng Gemini AI...",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Medium
                                     )
-                                    if (foregroundTranslationStep.isNotEmpty()) {
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text(
-                                            text = foregroundTranslationStep,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.SemiBold,
-                                            textAlign = TextAlign.Center,
-                                            modifier = Modifier.padding(horizontal = 24.dp)
-                                        )
+                                    if (foregroundTranslationSteps.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        val stepsListState = rememberLazyListState()
+                                        LaunchedEffect(foregroundTranslationSteps.size) {
+                                            if (foregroundTranslationSteps.isNotEmpty()) {
+                                                stepsListState.animateScrollToItem(foregroundTranslationSteps.lastIndex)
+                                            }
+                                        }
+                                        LazyColumn(
+                                            state = stepsListState,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(max = 200.dp)
+                                                .padding(horizontal = 24.dp)
+                                                .background(
+                                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                                    shape = RoundedCornerShape(8.dp)
+                                                )
+                                                .padding(12.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            items(foregroundTranslationSteps.size) { idx ->
+                                                val step = foregroundTranslationSteps[idx]
+                                                val isLast = idx == foregroundTranslationSteps.lastIndex
+                                                val isError = step.contains("Thất bại", ignoreCase = true) || step.contains("Lỗi", ignoreCase = true)
+                                                val isSuccess = step.contains("Thành công", ignoreCase = true)
+                                                
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.Top
+                                                ) {
+                                                    if (isLast && !isError && !isSuccess) {
+                                                        CircularProgressIndicator(
+                                                            modifier = Modifier
+                                                                .size(14.dp)
+                                                                .padding(top = 2.dp),
+                                                            strokeWidth = 2.dp,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    } else {
+                                                        val iconColor = when {
+                                                            isError -> MaterialTheme.colorScheme.error
+                                                            isSuccess -> androidx.compose.ui.graphics.Color(0xFF2E7D32)
+                                                            else -> MaterialTheme.colorScheme.outline
+                                                         }
+                                                         val iconChar = when {
+                                                             isError -> "✕"
+                                                             isSuccess -> "✓"
+                                                             else -> "•"
+                                                         }
+                                                         Text(
+                                                             text = iconChar,
+                                                             color = iconColor,
+                                                             style = MaterialTheme.typography.bodySmall,
+                                                             fontWeight = FontWeight.Bold,
+                                                             modifier = Modifier.width(14.dp)
+                                                         )
+                                                    }
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        text = step,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = when {
+                                                            isError -> MaterialTheme.colorScheme.error
+                                                            isSuccess -> androidx.compose.ui.graphics.Color(0xFF2E7D32)
+                                                            isLast -> MaterialTheme.colorScheme.primary
+                                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                                        },
+                                                        fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
+                                    Spacer(modifier = Modifier.height(8.dp))
                                     Text(
                                         text = "Quá trình này có thể mất vài giây tùy thuộc vào độ dài trang.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.outline,
-                                        modifier = Modifier.padding(top = 4.dp),
+                                        modifier = Modifier.padding(horizontal = 24.dp),
                                         textAlign = TextAlign.Center
                                     )
                                 }

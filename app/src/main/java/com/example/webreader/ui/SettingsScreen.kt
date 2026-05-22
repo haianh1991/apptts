@@ -423,8 +423,8 @@ fun SettingsScreen(
                                             Tiến trình chi tiết:
                                             ${log.steps.mapIndexed { idx, step -> "${idx + 1}. $step" }.joinToString("\n")}
                                             
-                                            ${if (log.status == "Thành công") "Phản hồi dịch từ Gemini:" else "Chi tiết lỗi:"}
-                                            ${if (log.status == "Thành công") log.geminiResponse else log.errorMessage}
+                                            ${if (log.status == "Thành công") "Phản hồi dịch từ Gemini:" else if (log.status == "Đang chạy") "Chi tiết trạng thái:" else "Chi tiết lỗi:"}
+                                            ${if (log.status == "Thành công") log.geminiResponse else if (log.status == "Đang chạy") "Đang tiến hành dịch thuật..." else log.errorMessage}
                                             -------------------------
                                         """.trimIndent()
                                         clipboardManager.setText(AnnotatedString(logDetail))
@@ -511,8 +511,16 @@ fun TransactionLogItem(
                     }
 
                     // Status Badge
-                    val statusBg = if (log.status == "Thành công") Color(0xFFE8F5E9) else Color(0xFFFFEBEE)
-                    val statusFg = if (log.status == "Thành công") Color(0xFF2E7D32) else Color(0xFFC62828)
+                    val statusBg = when (log.status) {
+                        "Thành công" -> Color(0xFFE8F5E9)
+                        "Đang chạy" -> Color(0xFFE3F2FD)
+                        else -> Color(0xFFFFEBEE)
+                    }
+                    val statusFg = when (log.status) {
+                        "Thành công" -> Color(0xFF2E7D32)
+                        "Đang chạy" -> Color(0xFF1565C0)
+                        else -> Color(0xFFC62828)
+                    }
                     Card(
                         colors = CardDefaults.cardColors(containerColor = statusBg)
                     ) {
@@ -609,16 +617,37 @@ fun TransactionLogItem(
 
                 // Response / Error Detail
                 val isSuccess = log.status == "Thành công"
-                val detailTitle = if (isSuccess) "Phản hồi dịch từ Gemini:" else "Chi tiết lỗi:"
-                val detailText = (if (isSuccess) log.geminiResponse else log.errorMessage) ?: "Không có dữ liệu"
-                val detailBoxBg = if (isSuccess) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-                val detailBoxBorderColor = if (isSuccess) MaterialTheme.colorScheme.outline.copy(alpha = 0.3f) else MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
+                val isRunning = log.status == "Đang chạy"
+                val detailTitle = when (log.status) {
+                    "Thành công" -> "Phản hồi dịch từ Gemini:"
+                    "Đang chạy" -> "Chi tiết trạng thái:"
+                    else -> "Chi tiết lỗi:"
+                }
+                val detailText = when (log.status) {
+                    "Thành công" -> log.geminiResponse
+                    "Đang chạy" -> "Đang tiến hành dịch thuật..."
+                    else -> log.errorMessage
+                } ?: "Không có dữ liệu"
+                val detailBoxBg = when (log.status) {
+                    "Thành công" -> MaterialTheme.colorScheme.surface
+                    "Đang chạy" -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    else -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                }
+                val detailBoxBorderColor = when (log.status) {
+                    "Thành công" -> MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    "Đang chạy" -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                    else -> MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
+                }
 
                 Text(
                     text = detailTitle,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = if (isSuccess) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    color = when (log.status) {
+                        "Thành công" -> MaterialTheme.colorScheme.primary
+                        "Đang chạy" -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.error
+                    },
                     modifier = Modifier.padding(top = 4.dp)
                 )
 
