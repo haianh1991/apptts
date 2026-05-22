@@ -1,5 +1,6 @@
 package com.example.webreader.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -19,6 +21,11 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -43,12 +50,20 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.webreader.data.TransactionLog
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -331,6 +346,101 @@ fun SettingsScreen(
                 }
             }
 
+            // Card Nhật ký dịch thuật
+            val translationLogs by viewModel.translationLogs.collectAsState(initial = emptyList())
+            val clipboardManager = LocalClipboardManager.current
+            val sdf = remember { SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()) }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.History,
+                                contentDescription = "Lịch sử dịch",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "Nhật ký dịch thuật",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        if (translationLogs.isNotEmpty()) {
+                            IconButton(
+                                onClick = { viewModel.clearTranslationLogs() },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Delete,
+                                    contentDescription = "Xóa tất cả nhật ký",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+
+                    if (translationLogs.isEmpty()) {
+                        Text(
+                            text = "Chưa có nhật ký dịch thuật nào.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    } else {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            translationLogs.forEach { log ->
+                                TransactionLogItem(
+                                    log = log,
+                                    sdf = sdf,
+                                    onCopyClick = {
+                                        val logDetail = """
+                                            --- NHẬT KÝ DỊCH THUẬT ---
+                                            ID: ${log.id}
+                                            Thời gian: ${sdf.format(Date(log.timestamp))}
+                                            Loại dịch: ${log.type}
+                                            Bài viết: ${log.title}
+                                            URL: ${log.url}
+                                            Trạng thái: ${log.status}
+                                            Khóa API đã dùng: ${log.usedApiKeys.joinToString(", ")}
+                                            
+                                            Tiến trình chi tiết:
+                                            ${log.steps.mapIndexed { idx, step -> "${idx + 1}. $step" }.joinToString("\n")}
+                                            
+                                            ${if (log.status == "Thành công") "Phản hồi dịch từ Gemini:" else "Chi tiết lỗi:"}
+                                            ${if (log.status == "Thành công") log.geminiResponse else log.errorMessage}
+                                            -------------------------
+                                        """.trimIndent()
+                                        clipboardManager.setText(AnnotatedString(logDetail))
+                                        android.widget.Toast.makeText(
+                                            viewModel.getApplication(),
+                                            "Đã sao chép nhật ký vào Clipboard",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.weight(1f))
 
             // Nút Lưu cấu hình
@@ -348,6 +458,209 @@ fun SettingsScreen(
                 Icon(Icons.Filled.Save, contentDescription = "Lưu")
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Lưu thiết lập")
+            }
+        }
+    }
+}
+
+@Composable
+fun TransactionLogItem(
+    log: TransactionLog,
+    sdf: SimpleDateFormat,
+    onCopyClick: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Header: Clickable to toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Type Badge
+                    val typeBg = if (log.type == "Đọc ngay") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
+                    val typeFg = if (log.type == "Đọc ngay") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = typeBg)
+                    ) {
+                        Text(
+                            text = log.type,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            fontWeight = FontWeight.Bold,
+                            color = typeFg
+                        )
+                    }
+
+                    // Status Badge
+                    val statusBg = if (log.status == "Thành công") Color(0xFFE8F5E9) else Color(0xFFFFEBEE)
+                    val statusFg = if (log.status == "Thành công") Color(0xFF2E7D32) else Color(0xFFC62828)
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = statusBg)
+                    ) {
+                        Text(
+                            text = log.status,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            fontWeight = FontWeight.Bold,
+                            color = statusFg
+                        )
+                    }
+
+                    // Time
+                    Text(
+                        text = sdf.format(Date(log.timestamp)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                IconButton(
+                    onClick = { expanded = !expanded },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                        contentDescription = if (expanded) "Thu gọn" else "Mở rộng"
+                    )
+                }
+            }
+
+            // Title and URL (always visible, but clickable)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+            ) {
+                Text(
+                    text = log.title.ifBlank { "Không có tiêu đề" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                if (log.url.isNotBlank()) {
+                    Text(
+                        text = log.url,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+            }
+
+            if (expanded) {
+                androidx.compose.material3.HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
+                )
+
+                // API Keys
+                if (log.usedApiKeys.isNotEmpty()) {
+                    Text(
+                        text = "Khóa API đã dùng: " + log.usedApiKeys.joinToString(", "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Steps
+                if (log.steps.isNotEmpty()) {
+                    Text(
+                        text = "Tiến trình chi tiết:",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier.padding(start = 4.dp)
+                    ) {
+                        log.steps.forEachIndexed { i, step ->
+                            Text(
+                                text = "${i + 1}. $step",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // Response / Error Detail
+                val isSuccess = log.status == "Thành công"
+                val detailTitle = if (isSuccess) "Phản hồi dịch từ Gemini:" else "Chi tiết lỗi:"
+                val detailText = (if (isSuccess) log.geminiResponse else log.errorMessage) ?: "Không có dữ liệu"
+                val detailBoxBg = if (isSuccess) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                val detailBoxBorderColor = if (isSuccess) MaterialTheme.colorScheme.outline.copy(alpha = 0.3f) else MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
+
+                Text(
+                    text = detailTitle,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isSuccess) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = detailBoxBg),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, detailBoxBorderColor)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(if (isSuccess) 120.dp else 80.dp)
+                            .padding(8.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        Text(
+                            text = detailText,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                        )
+                    }
+                }
+
+                // Actions row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    OutlinedButton(
+                        onClick = onCopyClick,
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.ContentCopy,
+                            contentDescription = "Sao chép",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Sao chép nhật ký", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
             }
         }
     }

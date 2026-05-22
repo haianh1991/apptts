@@ -10,14 +10,22 @@ class GeminiManager {
     suspend fun translateToVietnamese(
         text: String,
         apiKeys: List<String>,
-        modelName: String = "gemini-1.5-flash"
+        modelName: String = "gemini-1.5-flash",
+        logSteps: MutableList<String>
     ): Result<String> = withContext(Dispatchers.IO) {
         if (apiKeys.isEmpty()) {
-            return@withContext Result.failure(IllegalArgumentException("Danh sách khóa API Gemini trống. Vui lòng thiết lập trong Cài đặt."))
+            val errMsg = "Danh sách khóa API Gemini trống. Vui lòng thiết lập trong Cài đặt."
+            logSteps.add("Lỗi khởi tạo: $errMsg")
+            return@withContext Result.failure(IllegalArgumentException(errMsg))
         }
         if (text.isBlank()) {
-            return@withContext Result.failure(IllegalArgumentException("Không tìm thấy nội dung văn bản để dịch."))
+            val errMsg = "Không tìm thấy nội dung văn bản để dịch."
+            logSteps.add("Lỗi khởi tạo: $errMsg")
+            return@withContext Result.failure(IllegalArgumentException(errMsg))
         }
+
+        logSteps.add("Khởi chạy tiến trình dịch thuật. Kích thước văn bản gốc: ${text.length} ký tự.")
+        logSteps.add("Sử dụng mô hình AI: $modelName")
 
         val systemInstruction = """
             Bạn là một trợ lý dịch thuật và trích xuất nội dung thông minh.
@@ -31,6 +39,12 @@ class GeminiManager {
 
         val errors = mutableListOf<String>()
         for ((index, apiKey) in apiKeys.withIndex()) {
+            val keySnippet = if (apiKey.length > 8) {
+                apiKey.take(4) + "..." + apiKey.takeLast(4)
+            } else {
+                "Key ${index + 1}"
+            }
+            logSteps.add("Đang thử dịch với API Key số ${index + 1} ($keySnippet)...")
             try {
                 val generativeModel = GenerativeModel(
                     modelName = modelName,
@@ -44,21 +58,21 @@ class GeminiManager {
                 val response = generativeModel.generateContent(prompt)
                 val translatedText = response.text
                 if (translatedText != null) {
+                    logSteps.add("Dịch thành công với API Key số ${index + 1} ($keySnippet).")
                     return@withContext Result.success(translatedText)
                 } else {
                     throw Exception("Gemini API không trả về nội dung dịch.")
                 }
             } catch (e: Exception) {
-                val keySnippet = if (apiKey.length > 8) {
-                    apiKey.take(4) + "..." + apiKey.takeLast(4)
-                } else {
-                    "Key ${index + 1}"
-                }
-                errors.add("[$keySnippet]: ${getDetailedErrorMessage(e)}")
+                val detailedErr = getDetailedErrorMessage(e)
+                logSteps.add("Thất bại với API Key số ${index + 1} ($keySnippet). Chi tiết lỗi: $detailedErr")
+                errors.add("[$keySnippet]: $detailedErr")
             }
         }
         
-        Result.failure(Exception("Dịch thuật thất bại với toàn bộ các API Key đã thử:\n" + errors.joinToString("\n")))
+        val finalErrMsg = "Dịch thuật thất bại với toàn bộ các API Key đã thử:\n" + errors.joinToString("\n")
+        logSteps.add("Kết quả: $finalErrMsg")
+        Result.failure(Exception(finalErrMsg))
     }
 
     private fun getDetailedErrorMessage(e: Throwable): String {

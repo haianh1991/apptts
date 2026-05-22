@@ -10,6 +10,8 @@ import com.example.webreader.data.QueueItem
 import com.example.webreader.data.QueueRepository
 import com.example.webreader.data.BookmarkItem
 import com.example.webreader.data.BookmarkRepository
+import com.example.webreader.data.TransactionLog
+import com.example.webreader.data.TransactionLogRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,9 +31,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val ttsManager = TtsManager(application)
     val queueRepository = QueueRepository(application)
     val bookmarkRepository = BookmarkRepository(application)
+    val transactionLogRepository = TransactionLogRepository(application)
 
     private val _queue = MutableStateFlow<List<QueueItem>>(emptyList())
     val queue: StateFlow<List<QueueItem>> = _queue
+
+    private val _translationLogs = MutableStateFlow<List<TransactionLog>>(emptyList())
+    val translationLogs: StateFlow<List<TransactionLog>> = _translationLogs
 
     private val _activeTranslations = MutableStateFlow<List<ActiveTranslation>>(emptyList())
     val activeTranslations: StateFlow<List<ActiveTranslation>> = _activeTranslations
@@ -87,6 +93,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _queue.value = queueRepository.getQueue()
         _bookmarks.value = bookmarkRepository.getBookmarks()
         updateBookmarkStatus()
+        viewModelScope.launch {
+            _translationLogs.value = transactionLogRepository.getLogs()
+        }
         ttsManager.setCallbacks(
             onStart = { index ->
                 _currentParagraphIndex.value = index
@@ -203,8 +212,25 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     fun translateWebpage(text: String, title: String, url: String) {
         if (settings.geminiApiKeys.isEmpty()) {
-            _errorMessage.value = "Vui lòng nhập API Key trong phần Cài đặt để dịch trang web."
+            val errMsg = "Vui lòng nhập API Key trong phần Cài đặt để dịch trang web."
+            _errorMessage.value = errMsg
             _showReaderSheet.value = true // Show reader sheet to display the error and prompt user
+            
+            val logSteps = mutableListOf("Lỗi khởi tạo: Danh sách khóa API Gemini trống. Vui lòng thiết lập trong Cài đặt.")
+            val newLog = TransactionLog(
+                type = "Đọc ngay",
+                title = title,
+                url = url,
+                status = "Thất bại",
+                usedApiKeys = emptyList(),
+                steps = logSteps,
+                geminiResponse = null,
+                errorMessage = errMsg
+            )
+            viewModelScope.launch {
+                transactionLogRepository.addLog(newLog)
+                _translationLogs.value = transactionLogRepository.getLogs()
+            }
             return
         }
 
@@ -215,10 +241,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             _paragraphs.value = emptyList()
             _currentParagraphIndex.value = -1
 
+            val logSteps = mutableListOf<String>()
             val result = geminiManager.translateToVietnamese(
                 text = text,
                 apiKeys = settings.geminiApiKeys,
-                modelName = settings.geminiModel
+                modelName = settings.geminiModel,
+                logSteps = logSteps
             )
 
             _isTranslating.value = false
@@ -237,16 +265,60 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 } else {
                     _errorMessage.value = "Bản dịch rỗng hoặc không phân tích được đoạn văn."
                 }
+
+                val newLog = TransactionLog(
+                    type = "Đọc ngay",
+                    title = title,
+                    url = url,
+                    status = "Thành công",
+                    usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
+                    steps = logSteps,
+                    geminiResponse = translatedText,
+                    errorMessage = null
+                )
+                transactionLogRepository.addLog(newLog)
+                _translationLogs.value = transactionLogRepository.getLogs()
             }.onFailure { exception ->
-                _errorMessage.value = "Lỗi dịch thuật:\n${exception.message ?: exception.localizedMessage ?: "Không xác định"}"
+                val errMsg = exception.message ?: exception.localizedMessage ?: "Không xác định"
+                _errorMessage.value = "Lỗi dịch thuật:\n$errMsg"
+
+                val newLog = TransactionLog(
+                    type = "Đọc ngay",
+                    title = title,
+                    url = url,
+                    status = "Thất bại",
+                    usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
+                    steps = logSteps,
+                    geminiResponse = null,
+                    errorMessage = errMsg
+                )
+                transactionLogRepository.addLog(newLog)
+                _translationLogs.value = transactionLogRepository.getLogs()
             }
         }
     }
 
     fun translateAndAddToQueue(text: String, title: String, url: String) {
         if (settings.geminiApiKeys.isEmpty()) {
-            _errorMessage.value = "Vui lòng nhập API Key trong phần Cài đặt để dịch trang web."
+            val errMsg = "Vui lòng nhập API Key trong phần Cài đặt để dịch trang web."
+            _errorMessage.value = errMsg
             _showReaderSheet.value = true
+            
+            val logSteps = mutableListOf("Lỗi khởi tạo: Danh sách khóa API Gemini trống. Vui lòng thiết lập trong Cài đặt.")
+            val newLog = TransactionLog(
+                type = "Hàng chờ",
+                title = title,
+                url = url,
+                status = "Thất bại",
+                usedApiKeys = emptyList(),
+                steps = logSteps,
+                geminiResponse = null,
+                errorMessage = errMsg
+            )
+            viewModelScope.launch {
+                transactionLogRepository.addLog(newLog)
+                _translationLogs.value = transactionLogRepository.getLogs()
+            }
             return
         }
 
@@ -266,10 +338,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _activeTranslations.value = _activeTranslations.value + job
 
         viewModelScope.launch {
+            val logSteps = mutableListOf<String>()
             val result = geminiManager.translateToVietnamese(
                 text = text,
                 apiKeys = settings.geminiApiKeys,
-                modelName = settings.geminiModel
+                modelName = settings.geminiModel,
+                logSteps = logSteps
             )
 
             result.onSuccess { translatedText ->
@@ -308,6 +382,19 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         "Đã thêm vào hàng chờ: $title",
                         android.widget.Toast.LENGTH_SHORT
                     ).show()
+
+                    val newLog = TransactionLog(
+                        type = "Hàng chờ",
+                        title = title,
+                        url = url,
+                        status = "Thành công",
+                        usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
+                        steps = logSteps,
+                        geminiResponse = translatedText,
+                        errorMessage = null
+                    )
+                    transactionLogRepository.addLog(newLog)
+                    _translationLogs.value = transactionLogRepository.getLogs()
                 } else {
                     _activeTranslations.value = _activeTranslations.value.map {
                         if (it.id == job.id) it.copy(status = TranslationStatus.FAILED, errorMessage = "Không phân tích được đoạn văn") else it
@@ -317,19 +404,46 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         "Lỗi: Không phân tích được đoạn văn cho bài viết: $title",
                         android.widget.Toast.LENGTH_LONG
                     ).show()
+
+                    val newLog = TransactionLog(
+                        type = "Hàng chờ",
+                        title = title,
+                        url = url,
+                        status = "Thất bại",
+                        usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
+                        steps = logSteps,
+                        geminiResponse = null,
+                        errorMessage = "Không phân tích được đoạn văn"
+                    )
+                    transactionLogRepository.addLog(newLog)
+                    _translationLogs.value = transactionLogRepository.getLogs()
                 }
             }.onFailure { exception ->
+                val errMsg = exception.message ?: exception.localizedMessage ?: "Lỗi không xác định"
                 _activeTranslations.value = _activeTranslations.value.map {
                     if (it.id == job.id) it.copy(
                         status = TranslationStatus.FAILED,
-                        errorMessage = exception.message ?: exception.localizedMessage ?: "Lỗi không xác định"
+                        errorMessage = errMsg
                     ) else it
                 }
                 android.widget.Toast.makeText(
                     getApplication(),
-                    "Lỗi dịch thuật bài viết \"$title\":\n${exception.message ?: exception.localizedMessage ?: "Không xác định"}",
+                    "Lỗi dịch thuật bài viết \"$title\":\n$errMsg",
                     android.widget.Toast.LENGTH_LONG
                 ).show()
+
+                val newLog = TransactionLog(
+                    type = "Hàng chờ",
+                    title = title,
+                    url = url,
+                    status = "Thất bại",
+                    usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
+                    steps = logSteps,
+                    geminiResponse = null,
+                    errorMessage = errMsg
+                )
+                transactionLogRepository.addLog(newLog)
+                _translationLogs.value = transactionLogRepository.getLogs()
             }
         }
     }
@@ -391,15 +505,44 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun retryTranslation(job: ActiveTranslation) {
+        if (settings.geminiApiKeys.isEmpty()) {
+            val errMsg = "Vui lòng nhập API Key trong phần Cài đặt để dịch trang web."
+            _activeTranslations.value = _activeTranslations.value.map {
+                if (it.id == job.id) it.copy(
+                    status = TranslationStatus.FAILED,
+                    errorMessage = errMsg
+                ) else it
+            }
+            
+            val logSteps = mutableListOf("Lỗi khởi tạo: Danh sách khóa API Gemini trống. Vui lòng thiết lập trong Cài đặt.")
+            val newLog = TransactionLog(
+                type = "Hàng chờ",
+                title = job.title,
+                url = job.url,
+                status = "Thất bại",
+                usedApiKeys = emptyList(),
+                steps = logSteps,
+                geminiResponse = null,
+                errorMessage = errMsg
+            )
+            viewModelScope.launch {
+                transactionLogRepository.addLog(newLog)
+                _translationLogs.value = transactionLogRepository.getLogs()
+            }
+            return
+        }
+
         _activeTranslations.value = _activeTranslations.value.map {
             if (it.id == job.id) it.copy(status = TranslationStatus.TRANSLATING, errorMessage = null) else it
         }
         
         viewModelScope.launch {
+            val logSteps = mutableListOf<String>()
             val result = geminiManager.translateToVietnamese(
                 text = job.text,
                 apiKeys = settings.geminiApiKeys,
-                modelName = settings.geminiModel
+                modelName = settings.geminiModel,
+                logSteps = logSteps
             )
             
             result.onSuccess { translatedText ->
@@ -437,18 +580,58 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         "Đã thêm vào hàng chờ: ${job.title}",
                         android.widget.Toast.LENGTH_SHORT
                     ).show()
+
+                    val newLog = TransactionLog(
+                        type = "Hàng chờ",
+                        title = job.title,
+                        url = job.url,
+                        status = "Thành công",
+                        usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
+                        steps = logSteps,
+                        geminiResponse = translatedText,
+                        errorMessage = null
+                    )
+                    transactionLogRepository.addLog(newLog)
+                    _translationLogs.value = transactionLogRepository.getLogs()
                 } else {
                     _activeTranslations.value = _activeTranslations.value.map {
                         if (it.id == job.id) it.copy(status = TranslationStatus.FAILED, errorMessage = "Không phân tích được đoạn văn") else it
                     }
+
+                    val newLog = TransactionLog(
+                        type = "Hàng chờ",
+                        title = job.title,
+                        url = job.url,
+                        status = "Thất bại",
+                        usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
+                        steps = logSteps,
+                        geminiResponse = null,
+                        errorMessage = "Không phân tích được đoạn văn"
+                    )
+                    transactionLogRepository.addLog(newLog)
+                    _translationLogs.value = transactionLogRepository.getLogs()
                 }
             }.onFailure { exception ->
+                val errMsg = exception.message ?: exception.localizedMessage ?: "Lỗi không xác định"
                 _activeTranslations.value = _activeTranslations.value.map {
                     if (it.id == job.id) it.copy(
                         status = TranslationStatus.FAILED,
-                        errorMessage = exception.message ?: exception.localizedMessage ?: "Lỗi không xác định"
+                        errorMessage = errMsg
                     ) else it
                 }
+
+                val newLog = TransactionLog(
+                    type = "Hàng chờ",
+                    title = job.title,
+                    url = job.url,
+                    status = "Thất bại",
+                    usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
+                    steps = logSteps,
+                    geminiResponse = null,
+                    errorMessage = errMsg
+                )
+                transactionLogRepository.addLog(newLog)
+                _translationLogs.value = transactionLogRepository.getLogs()
             }
         }
     }
@@ -558,6 +741,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     fun clearError() {
         _errorMessage.value = null
+    }
+
+    fun clearTranslationLogs() {
+        viewModelScope.launch {
+            transactionLogRepository.clearLogs()
+            _translationLogs.value = emptyList()
+        }
     }
 
     override fun onCleared() {
