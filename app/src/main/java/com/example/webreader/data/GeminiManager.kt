@@ -10,6 +10,38 @@ import kotlin.time.Duration.Companion.seconds
 
 class GeminiManager {
 
+    suspend fun translateTitle(
+        title: String,
+        apiKeys: List<String>,
+        modelName: String = "gemini-1.5-flash"
+    ): String = withContext(Dispatchers.IO) {
+        if (apiKeys.isEmpty() || title.isBlank()) return@withContext title
+        var currentKeyIndex = 0
+        val keysCount = apiKeys.size
+        for (attempt in 0 until keysCount) {
+            val keyIdx = (currentKeyIndex + attempt) % keysCount
+            val apiKey = apiKeys[keyIdx]
+            try {
+                val generativeModel = GenerativeModel(
+                    modelName = modelName,
+                    apiKey = apiKey,
+                    requestOptions = RequestOptions(timeout = 15.seconds),
+                    systemInstruction = content {
+                        text("Bạn là trợ lý dịch thuật. Hãy dịch tiêu đề chương truyện hoặc bài viết sang tiếng Việt một cách tự nhiên, ngắn gọn và chính xác nhất. Chỉ trả về bản dịch tiêu đề, không giải thích, không thêm dấu ngoặc kép hay bất kỳ thông tin nào khác.")
+                    }
+                )
+                val response = generativeModel.generateContent(title)
+                val translated = response.text?.trim()
+                if (!translated.isNullOrEmpty()) {
+                    return@withContext translated
+                }
+            } catch (e: Exception) {
+                // Ignore and try next key
+            }
+        }
+        return@withContext title
+    }
+
     suspend fun translateToVietnamese(
         text: String,
         apiKeys: List<String>,
