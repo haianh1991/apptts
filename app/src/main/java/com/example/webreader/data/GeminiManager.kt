@@ -254,49 +254,119 @@ class GeminiManager {
         val totalWords = countWords(text)
         if (totalWords <= maxWordCount) return listOf(text)
 
-        val chunks = mutableListOf<String>()
         val paragraphs = text.split("\n")
-        var currentChunk = StringBuilder()
-        var currentChunkWords = 0
+        
+        // 1. Pre-split paragraphs using maxWordCount to determine exact greedy chunk count
+        val flatParagraphsMax = splitParagraphs(paragraphs, maxWordCount)
+        val flatParagraphsMaxWordCounts = flatParagraphsMax.map { countWords(it) }
+        val numChunks = getFlatGreedyChunksCount(flatParagraphsMaxWordCounts, maxWordCount)
+        
+        if (numChunks <= 1) return listOf(text)
 
+        // 2. Calculate dynamic target chunk size
+        val targetChunkSize = kotlin.math.ceil(totalWords.toDouble() / numChunks).toInt()
+
+        // 3. Pre-split paragraphs using targetChunkSize to allow even distribution
+        val flatParagraphs = splitParagraphs(paragraphs, targetChunkSize)
+
+        // 4. Partition flatParagraphs into exactly `numChunks` chunks using binary search
+        return partitionParagraphs(flatParagraphs, numChunks, maxWordCount)
+    }
+
+    private fun splitParagraphs(paragraphs: List<String>, maxWords: Int): List<String> {
+        val result = mutableListOf<String>()
         for (paragraph in paragraphs) {
             val paragraphWords = countWords(paragraph)
-            
-            if (currentChunk.isNotEmpty() && currentChunkWords + paragraphWords > maxWordCount) {
+            if (paragraphWords > maxWords) {
+                var remaining = paragraph
+                while (countWords(remaining) > maxWords) {
+                    val splitIndex = findGoodWordSplitPoint(remaining, maxWords)
+                    val part = remaining.substring(0, splitIndex)
+                    result.add(part)
+                    remaining = remaining.substring(splitIndex)
+                }
+                if (remaining.isNotEmpty()) {
+                    result.add(remaining)
+                }
+            } else {
+                result.add(paragraph)
+            }
+        }
+        return result
+    }
+
+    private fun getFlatGreedyChunksCount(wordCounts: List<Int>, maxWordCount: Int): Int {
+        var count = 1
+        var currentSum = 0
+        for (words in wordCounts) {
+            if (currentSum + words > maxWordCount) {
+                count++
+                currentSum = words
+            } else {
+                currentSum += words
+            }
+        }
+        return count
+    }
+
+    private fun partitionParagraphs(paragraphs: List<String>, numChunks: Int, maxWordCount: Int): List<String> {
+        val paragraphWordCounts = paragraphs.map { countWords(it) }
+        val totalWords = paragraphWordCounts.sum()
+        
+        var low = paragraphWordCounts.maxOrNull() ?: 0
+        low = maxOf(low, kotlin.math.ceil(totalWords.toDouble() / numChunks).toInt())
+        
+        var high = maxWordCount
+        high = maxOf(high, low)
+        
+        var optimalLimit = high
+        
+        while (low <= high) {
+            val mid = (low + high) / 2
+            if (canPartition(paragraphWordCounts, numChunks, mid)) {
+                optimalLimit = mid
+                high = mid - 1
+            } else {
+                low = mid + 1
+            }
+        }
+        
+        val chunks = mutableListOf<String>()
+        var currentChunk = StringBuilder()
+        var currentChunkWords = 0
+        
+        for (paragraph in paragraphs) {
+            val paragraphWords = countWords(paragraph)
+            if (currentChunk.isNotEmpty() && currentChunkWords + paragraphWords > optimalLimit) {
                 chunks.add(currentChunk.toString())
                 currentChunk = StringBuilder()
                 currentChunkWords = 0
             }
-
-            if (paragraphWords > maxWordCount) {
-                if (currentChunk.isNotEmpty()) {
-                    chunks.add(currentChunk.toString())
-                    currentChunk = StringBuilder()
-                    currentChunkWords = 0
-                }
-                var remaining = paragraph
-                while (countWords(remaining) > maxWordCount) {
-                    val splitIndex = findGoodWordSplitPoint(remaining, maxWordCount)
-                    val part = remaining.substring(0, splitIndex)
-                    chunks.add(part)
-                    remaining = remaining.substring(splitIndex)
-                }
-                if (remaining.isNotEmpty()) {
-                    currentChunk.append(remaining)
-                    currentChunkWords = countWords(remaining)
-                }
-            } else {
-                if (currentChunk.isNotEmpty()) {
-                    currentChunk.append("\n")
-                }
-                currentChunk.append(paragraph)
-                currentChunkWords += paragraphWords
+            if (currentChunk.isNotEmpty()) {
+                currentChunk.append("\n")
             }
+            currentChunk.append(paragraph)
+            currentChunkWords += paragraphWords
         }
         if (currentChunk.isNotEmpty()) {
             chunks.add(currentChunk.toString())
         }
         return chunks
+    }
+
+    private fun canPartition(wordCounts: List<Int>, numChunks: Int, limit: Int): Boolean {
+        var chunksCount = 1
+        var currentSum = 0
+        for (words in wordCounts) {
+            if (words > limit) return false
+            if (currentSum + words > limit) {
+                chunksCount++
+                currentSum = words
+            } else {
+                currentSum += words
+            }
+        }
+        return chunksCount <= numChunks
     }
 
     private fun findGoodWordSplitPoint(text: String, maxWordCount: Int): Int {

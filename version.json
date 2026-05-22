@@ -1,7 +1,7 @@
 {
-  "versionCode": 4,
-  "versionName": "1.3.0",
+  "versionCode": 5,
+  "versionName": "1.3.1",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.3.0.apk",
-  "releaseNotes": "Gộp dịch tiêu đề và nội dung làm 1 request để sửa lỗi EOF kết nối và tiết kiệm 50% API quota cho người dùng freetier."
+  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.3.1.apk",
+  "releaseNotes": "Tối ưu hóa thuật toán phân chia phân đoạn (chunking) giúp văn bản được dịch đều đặn hơn giữa các phần."
 }
