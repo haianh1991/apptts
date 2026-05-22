@@ -147,13 +147,37 @@ class GeminiManager {
 
     private fun countWords(text: String): Int {
         if (text.isBlank()) return 0
-        val trimmed = text.trim()
-        val hasSpaces = trimmed.contains(Regex("\\s+"))
-        return if (hasSpaces) {
-            trimmed.split(Regex("\\s+")).size
-        } else {
-            trimmed.length
+        var wordCount = 0
+        val currentWord = StringBuilder()
+        for (char in text) {
+            if (isCjk(char)) {
+                if (currentWord.isNotEmpty()) {
+                    wordCount += countSpaceSeparatedWords(currentWord.toString())
+                    currentWord.clear()
+                }
+                wordCount++
+            } else {
+                currentWord.append(char)
+            }
         }
+        if (currentWord.isNotEmpty()) {
+            wordCount += countSpaceSeparatedWords(currentWord.toString())
+        }
+        return wordCount
+    }
+
+    private fun isCjk(c: Char): Boolean {
+        return c in '\u4e00'..'\u9fff' || 
+               c in '\u3400'..'\u4dbf' || 
+               c in '\uf900'..'\ufaff' || 
+               c in '\u3040'..'\u30ff' || 
+               c in '\uac00'..'\ud7af'
+    }
+
+    private fun countSpaceSeparatedWords(text: String): Int {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return 0
+        return trimmed.split(Regex("\\s+")).size
     }
 
     private fun splitTextIntoChunks(text: String, maxWordCount: Int = 8000): List<String> {
@@ -206,34 +230,45 @@ class GeminiManager {
     }
 
     private fun findGoodWordSplitPoint(text: String, maxWordCount: Int): Int {
-        val hasSpaces = text.contains(Regex("\\s+"))
-        if (hasSpaces) {
-            val spacePattern = Regex("\\s+")
-            val matchResults = spacePattern.findAll(text).toList()
-            if (matchResults.isEmpty()) return text.length
-            if (matchResults.size < maxWordCount) return text.length
-            
-            val candidateMatch = matchResults[maxWordCount - 1]
-            val limitIndex = candidateMatch.range.first
-            
-            val candidateText = text.substring(0, limitIndex)
-            val punctuation = listOf('.', '?', '!', '。', '？', '！')
-            for (i in candidateText.length - 1 downTo limitIndex / 2) {
-                if (candidateText[i] in punctuation) {
-                    return i + 1
+        var wordCount = 0
+        var splitIndex = text.length
+        val currentWord = StringBuilder()
+        
+        for (i in text.indices) {
+            val char = text[i]
+            if (isCjk(char)) {
+                if (currentWord.isNotEmpty()) {
+                    wordCount += countSpaceSeparatedWords(currentWord.toString())
+                    currentWord.clear()
                 }
+                wordCount++
+            } else {
+                currentWord.append(char)
             }
-            return limitIndex + 1
-        } else {
-            val limit = minOf(maxWordCount, text.length)
-            val candidate = text.substring(0, limit)
-            val punctuation = listOf('.', '?', '!', '。', '？', '！')
-            for (i in candidate.length - 1 downTo limit / 2) {
-                if (candidate[i] in punctuation) {
-                    return i + 1
-                }
+            
+            if (wordCount >= maxWordCount) {
+                splitIndex = i + 1
+                break
             }
-            return limit
         }
+        
+        if (splitIndex >= text.length) {
+            return text.length
+        }
+        
+        val candidate = text.substring(0, splitIndex)
+        val punctuation = listOf('.', '?', '!', '。', '？', '！', ',', '，', ';', '；')
+        for (i in candidate.length - 1 downTo splitIndex / 2) {
+            if (candidate[i] in punctuation) {
+                return i + 1
+            }
+        }
+        
+        val lastSpace = candidate.lastIndexOf(' ')
+        if (lastSpace != -1 && lastSpace > splitIndex / 2) {
+            return lastSpace + 1
+        }
+        
+        return splitIndex
     }
 }
