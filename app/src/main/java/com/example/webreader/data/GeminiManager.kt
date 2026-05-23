@@ -20,6 +20,26 @@ class GeminiManager {
         SafetySetting(HarmCategory.DANGEROUS_CONTENT, BlockThreshold.NONE)
     )
 
+    private val sensitiveKeywords = listOf(
+        "杀", "死", "血", "尸", "骨", "刀", "枪", "毒", "裸", "暴力", "虐", "斩", "碎", "爆", "强奸", "淫"
+    )
+
+    private fun scanSensitiveSentences(text: String): List<String> {
+        val sentences = text.split(Regex("[。！？\\?\\!\n]"))
+        val suspicious = mutableListOf<String>()
+        for (sentence in sentences) {
+            val trimmed = sentence.trim()
+            if (trimmed.isEmpty()) continue
+            for (keyword in sensitiveKeywords) {
+                if (trimmed.contains(keyword)) {
+                    suspicious.add(trimmed)
+                    break
+                }
+            }
+        }
+        return suspicious
+    }
+
     suspend fun translateTitle(
         title: String,
         apiKeys: List<String>,
@@ -156,7 +176,7 @@ class GeminiManager {
                     val prompt = if (chunkIndex == 0 && !title.isNullOrBlank()) {
                         "Tiêu đề gốc cần dịch:\n$title\n\nDưới đây là văn bản trang web cần dịch sang ngôn ngữ đích ($targetLang):\n\n$chunk"
                     } else {
-                        "Dưới đây là văn bản trang web cần dịch sang ngôn ngữ đích ($targetLang):\n\n$chunk"
+                        "Hãy dịch văn bản thô dưới đây từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang). Hãy lọc bỏ các thành phần quảng cáo hoặc nút điều hướng nếu có, dịch sát nghĩa và tự nhiên nhất:\n\n$chunk"
                     }
 
                     val responseStream = generativeModel.generateContentStream(prompt)
@@ -197,13 +217,42 @@ class GeminiManager {
             if (chunkSuccess) {
                 translatedChunks.add(chunkResult)
             } else {
-                val finalErrMsg = if (chunks.size > 1) {
-                    "Không thể dịch phần ${chunkIndex + 1}/${chunks.size} sau khi thử toàn bộ các API Key:\n" + chunkErrors.joinToString("\n")
+                val isBlocked = chunkErrors.any { it.contains("blocked", ignoreCase = true) || it.contains("safety", ignoreCase = true) }
+                val headerMsg = if (isBlocked) {
+                    "--- [Đoạn này bị bộ lọc Gemini API chặn dịch thuật, hiển thị văn bản gốc] ---"
                 } else {
-                    "Dịch thuật thất bại với toàn bộ các API Key đã thử:\n" + chunkErrors.joinToString("\n")
+                    "--- [Lỗi dịch thuật, hiển thị văn bản gốc] ---"
+                }
+                
+                if (isBlocked) {
+                    // Quét các câu tiếng Trung nghi ngờ gây lỗi blocked offline cục bộ
+                    val suspicious = scanSensitiveSentences(chunk)
+                    if (suspicious.isNotEmpty()) {
+                        addStep("Chẩn đoán: Phát hiện ${suspicious.size} câu tiếng Trung nghi ngờ chứa từ khóa nhạy cảm gây lỗi blocked:")
+                        suspicious.take(5).forEach { 
+                            addStep("  -> Nghi ngờ: \"$it\"")
+                        }
+                        if (suspicious.size > 5) {
+                            addStep("  -> ... và ${suspicious.size - 5} câu khác.")
+                        }
+                    } else {
+                        addStep("Chẩn đoán: Không phát hiện câu nào chứa từ khóa nhạy cảm thông thường trong danh sách quét cục bộ.")
+                    }
+                }
+                
+                val fallbackText = "$headerMsg\n\n$chunk"
+                translatedChunks.add(fallbackText)
+                
+                val finalErrMsg = if (chunks.size > 1) {
+                    "Không thể dịch phần ${chunkIndex + 1}/${chunks.size}. Hệ thống sử dụng văn bản gốc để tiếp tục tiến trình."
+                } else {
+                    "Không thể dịch văn bản. Hệ thống sử dụng văn bản gốc để tiếp tục tiến trình."
                 }
                 addStep("Kết quả: $finalErrMsg")
-                return@withContext Result.failure(Exception(finalErrMsg))
+                
+                // Cập nhật giao diện đọc tức thì để người dùng không bị treo màn hình dịch
+                val currentTotalText = translatedChunks.joinToString("\n\n")
+                onContentUpdated?.invoke(currentTotalText)
             }
         }
 

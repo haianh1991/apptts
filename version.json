@@ -1,7 +1,7 @@
 {
-  "versionCode": 10,
-  "versionName": "1.3.6",
+  "versionCode": 11,
+  "versionName": "1.3.7",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.3.6.apk",
-  "releaseNotes": "Khắc phục lỗi chặn dịch thuật khi sử dụng API Key Gemini Free Tier bằng cách cấu hình bỏ chặn (HarmBlockThreshold.NONE) cho tất cả các danh mục kiểm duyệt nội dung an toàn."
+  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.3.7.apk",
+  "releaseNotes": "Sửa lỗi trôi tiếng Trung ở các chunk sau, khắc phục triệt để lỗi blocked bằng cơ chế tự phục hồi và chẩn đoán offline từ nhạy cảm, đồng thời mở rộng tính năng kéo thả bản dịch hoạt động toàn diện kể cả khi có thư mục."
 }

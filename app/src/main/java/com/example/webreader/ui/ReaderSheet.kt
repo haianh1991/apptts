@@ -522,24 +522,100 @@ fun ReaderSheet(
                         val translatingItems = activeTranslations.filter { it.status == TranslationStatus.TRANSLATING }
                         val failedItems = activeTranslations.filter { it.status == TranslationStatus.FAILED }
                         
-                        val topItemsCount = (if (translatingItems.isNotEmpty()) 1 + translatingItems.size else 0) +
-                                           (if (failedItems.isNotEmpty()) 1 + failedItems.size else 0) +
-                                           (if (queue.isNotEmpty()) 1 else 0)
+                        val listItems = remember(translatingItems, failedItems, folders, queue, expandedFolderIds) {
+                            val list = mutableListOf<QueueListItem>()
+                            
+                            if (translatingItems.isNotEmpty()) {
+                                list.add(QueueListItem.TranslatingHeader(translatingItems.size))
+                                translatingItems.forEach { list.add(QueueListItem.TranslatingItem(it)) }
+                            }
+                            
+                            if (failedItems.isNotEmpty()) {
+                                list.add(QueueListItem.FailedHeader(failedItems.size))
+                                failedItems.forEach { list.add(QueueListItem.FailedItem(it)) }
+                            }
+                            
+                            if (folders.isNotEmpty()) {
+                                list.add(QueueListItem.FoldersHeader)
+                                folders.forEach { folder ->
+                                    val folderItems = queue.filter { it.folderId == folder.id }
+                                    val isExpanded = expandedFolderIds.contains(folder.id)
+                                    list.add(QueueListItem.FolderHeaderItem(folder, folderItems.size, isExpanded))
+                                    if (isExpanded) {
+                                        folderItems.forEach { list.add(QueueListItem.FolderQueueItem(it, folder.id)) }
+                                    }
+                                }
+                                
+                                val folderIds = folders.map { it.id }.toSet()
+                                val rootItems = queue.filter { it.folderId == null || !folderIds.contains(it.folderId) }
+                                if (rootItems.isNotEmpty()) {
+                                    list.add(QueueListItem.RootItemsHeader(rootItems.size))
+                                    rootItems.forEach { list.add(QueueListItem.RootQueueItem(it)) }
+                                }
+                            } else {
+                                if (queue.isNotEmpty()) {
+                                    list.add(QueueListItem.FinishedHeader(queue.size))
+                                    queue.forEach { list.add(QueueListItem.FlatQueueItem(it)) }
+                                }
+                            }
+                            list
+                        }
 
                         val dragDropListState = rememberLazyListState()
                         val dragDropState = rememberDragDropState(
                             lazyListState = dragDropListState,
                             isDraggable = { index ->
-                                val queueStartIndex = topItemsCount
-                                val queueEndIndex = topItemsCount + queue.size
-                                index in queueStartIndex until queueEndIndex
+                                if (index in listItems.indices) {
+                                    val item = listItems[index]
+                                    item is QueueListItem.FolderQueueItem || 
+                                    item is QueueListItem.RootQueueItem || 
+                                    item is QueueListItem.FlatQueueItem
+                                } else {
+                                    false
+                                }
                             },
                             onMove = { fromIndex, toIndex ->
-                                val queueStartIndex = topItemsCount
-                                val queueEndIndex = topItemsCount + queue.size
-                                if (fromIndex in queueStartIndex until queueEndIndex && toIndex in queueStartIndex until queueEndIndex) {
-                                    viewModel.reorderQueue(fromIndex - queueStartIndex, toIndex - queueStartIndex)
-                                    true
+                                if (fromIndex in listItems.indices && toIndex in listItems.indices) {
+                                    val fromItem = listItems[fromIndex]
+                                    val toItem = listItems[toIndex]
+                                    
+                                    val fromId = when (fromItem) {
+                                        is QueueListItem.FolderQueueItem -> fromItem.item.id
+                                        is QueueListItem.RootQueueItem -> fromItem.item.id
+                                        is QueueListItem.FlatQueueItem -> fromItem.item.id
+                                        else -> null
+                                    }
+                                    
+                                    val toId = when (toItem) {
+                                        is QueueListItem.FolderQueueItem -> toItem.item.id
+                                        is QueueListItem.RootQueueItem -> toItem.item.id
+                                        is QueueListItem.FlatQueueItem -> toItem.item.id
+                                        else -> null
+                                    }
+                                    
+                                    if (fromId != null && toId != null) {
+                                        when {
+                                            fromItem is QueueListItem.FolderQueueItem && toItem is QueueListItem.FolderQueueItem -> {
+                                                if (fromItem.folderId == toItem.folderId) {
+                                                    viewModel.reorderQueueItems(fromId, toId)
+                                                    true
+                                                } else {
+                                                    false
+                                                }
+                                            }
+                                            fromItem is QueueListItem.RootQueueItem && toItem is QueueListItem.RootQueueItem -> {
+                                                viewModel.reorderQueueItems(fromId, toId)
+                                                true
+                                            }
+                                            fromItem is QueueListItem.FlatQueueItem && toItem is QueueListItem.FlatQueueItem -> {
+                                                viewModel.reorderQueueItems(fromId, toId)
+                                                true
+                                            }
+                                            else -> false
+                                        }
+                                    } else {
+                                        false
+                                    }
                                 } else {
                                     false
                                 }
@@ -631,253 +707,242 @@ fun ReaderSheet(
                                         .fillMaxWidth(),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    // SECTION 1: Translating Items
-                                    if (translatingItems.isNotEmpty()) {
-                                        item {
-                                            Text(
-                                                text = appStrings.readerTranslatingCount.format(translatingItems.size),
-                                                style = MaterialTheme.typography.titleSmall,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-                                            )
-                                        }
-                                        items(translatingItems.size, key = { index -> "translating_${translatingItems[index].id}" }) { index ->
-                                            val item = translatingItems[index]
-                                            Card(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                colors = CardDefaults.cardColors(
-                                                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
-                                                ),
-                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(12.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    CircularProgressIndicator(
-                                                        modifier = Modifier.size(20.dp),
-                                                        strokeWidth = 2.dp,
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
-                                                    Spacer(modifier = Modifier.width(12.dp))
-                                                    Column(modifier = Modifier.weight(1f)) {
-                                                        Text(
-                                                            text = item.title,
-                                                            style = MaterialTheme.typography.bodyMedium,
-                                                            fontWeight = FontWeight.Bold,
-                                                            maxLines = 1
-                                                        )
-                                                        Text(
-                                                            text = item.currentStep ?: appStrings.readerPreparingTranslation,
-                                                            style = MaterialTheme.typography.bodySmall,
-                                                            color = MaterialTheme.colorScheme.primary,
-                                                            fontWeight = FontWeight.Medium,
-                                                            maxLines = 2,
-                                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                                        )
-                                                    }
-                                                    IconButton(onClick = { viewModel.removeActiveTranslation(item.id) }) {
-                                                        Icon(
-                                                            imageVector = Icons.Filled.Close,
-                                                            contentDescription = appStrings.btnCancel,
-                                                            tint = MaterialTheme.colorScheme.outline
-                                                        )
-                                                    }
-                                                }
+                                    items(
+                                        count = listItems.size,
+                                        key = { index ->
+                                            when (val item = listItems[index]) {
+                                                is QueueListItem.TranslatingHeader -> "translating_header"
+                                                is QueueListItem.TranslatingItem -> "translating_${item.item.id}"
+                                                is QueueListItem.FailedHeader -> "failed_header"
+                                                is QueueListItem.FailedItem -> "failed_${item.item.id}"
+                                                is QueueListItem.FoldersHeader -> "folders_header"
+                                                is QueueListItem.FolderHeaderItem -> "folder_${item.folder.id}"
+                                                is QueueListItem.FolderQueueItem -> "folder_item_${item.item.id}"
+                                                is QueueListItem.RootItemsHeader -> "root_header"
+                                                is QueueListItem.RootQueueItem -> "root_item_${item.item.id}"
+                                                is QueueListItem.FinishedHeader -> "finished_header"
+                                                is QueueListItem.FlatQueueItem -> "flat_item_${item.item.id}"
                                             }
                                         }
-                                    }
-
-                                    // SECTION 2: Failed Items
-                                    if (failedItems.isNotEmpty()) {
-                                        item {
-                                            Text(
-                                                text = appStrings.readerTranslatingFailedCount.format(failedItems.size),
-                                                style = MaterialTheme.typography.titleSmall,
-                                                color = MaterialTheme.colorScheme.error,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-                                            )
-                                        }
-                                        items(failedItems.size, key = { index -> "failed_${failedItems[index].id}" }) { index ->
-                                            val item = failedItems[index]
-                                            Card(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                colors = CardDefaults.cardColors(
-                                                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
-                                                ),
-                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f))
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(12.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Column(modifier = Modifier.weight(1f)) {
-                                                        Text(
-                                                            text = item.title,
-                                                            style = MaterialTheme.typography.bodyMedium,
-                                                            fontWeight = FontWeight.Bold,
-                                                            maxLines = 1
-                                                        )
-                                                        Text(
-                                                            text = item.errorMessage ?: appStrings.readerErrorTitle,
-                                                            style = MaterialTheme.typography.bodySmall,
-                                                            color = MaterialTheme.colorScheme.error,
-                                                            maxLines = 2
-                                                        )
-                                                    }
-                                                    IconButton(onClick = { viewModel.retryTranslation(item) }) {
-                                                        Icon(
-                                                            imageVector = Icons.Filled.Refresh,
-                                                            contentDescription = appStrings.btnRetry,
-                                                            tint = MaterialTheme.colorScheme.primary
-                                                        )
-                                                    }
-                                                    IconButton(onClick = { viewModel.removeActiveTranslation(item.id) }) {
-                                                        Icon(
-                                                            imageVector = Icons.Filled.Close,
-                                                            contentDescription = appStrings.btnDelete,
-                                                            tint = MaterialTheme.colorScheme.error
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // SECTION 3: Folders & Items
-                                    if (folders.isNotEmpty()) {
-                                        item {
-                                            Text(
-                                                text = appStrings.readerFolderCount.format(folders.size),
-                                                style = MaterialTheme.typography.titleSmall,
-                                                color = MaterialTheme.colorScheme.secondary,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-                                            )
-                                        }
-
-                                        folders.forEach { folder ->
-                                            val folderItems = queue.filter { it.folderId == folder.id }
-                                            val isExpanded = expandedFolderIds.contains(folder.id)
-
-                                            item(key = "folder_${folder.id}") {
-                                                FolderRow(
-                                                    folder = folder,
-                                                    itemCount = folderItems.size,
-                                                    isExpanded = isExpanded,
-                                                    onToggleExpand = {
-                                                        expandedFolderIds = if (isExpanded) {
-                                                            expandedFolderIds - folder.id
-                                                        } else {
-                                                            expandedFolderIds + folder.id
-                                                        }
-                                                    },
-                                                    onRename = {
-                                                        folderToRename = folder
-                                                        renameFolderName = folder.name
-                                                    },
-                                                    onDelete = { folderToDelete = folder }
-                                                )
-                                            }
-
-                                            if (isExpanded) {
-                                                items(folderItems.size, key = { idx -> "folder_item_${folderItems[idx].id}" }) { idx ->
-                                                    val item = folderItems[idx]
-                                                    val isCurrent = item.id == currentItem?.id
-                                                    QueueItemCard(
-                                                        item = item,
-                                                        isCurrent = isCurrent,
-                                                        isPlaying = isPlaying,
-                                                        onPlayPause = {
-                                                            if (isCurrent && isPlaying) {
-                                                                viewModel.pauseReading()
-                                                            } else {
-                                                                viewModel.playQueueItemById(item.id)
-                                                                activeTab = 0
-                                                            }
-                                                        },
-                                                        onRemove = { viewModel.removeQueueItemById(item.id) },
-                                                        onMoveClick = { itemToMove = item },
-                                                        modifier = Modifier.padding(start = 16.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        // SECTION 4: Root Items (when folders exist)
-                                        val folderIds = folders.map { it.id }.toSet()
-                                        val rootItems = queue.filter { it.folderId == null || !folderIds.contains(it.folderId) }
-
-                                        if (rootItems.isNotEmpty()) {
-                                            item {
+                                    ) { index ->
+                                        when (val item = listItems[index]) {
+                                            is QueueListItem.TranslatingHeader -> {
                                                 Text(
-                                                    text = appStrings.readerRootItemsCount.format(rootItems.size),
+                                                    text = appStrings.readerTranslatingCount.format(item.count),
                                                     style = MaterialTheme.typography.titleSmall,
-                                                    color = MaterialTheme.colorScheme.secondary,
+                                                    color = MaterialTheme.colorScheme.primary,
                                                     fontWeight = FontWeight.Bold,
-                                                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                                                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
                                                 )
                                             }
-
-                                            items(rootItems.size, key = { idx -> "root_item_${rootItems[idx].id}" }) { idx ->
-                                                val item = rootItems[idx]
-                                                val isCurrent = item.id == currentItem?.id
-                                                QueueItemCard(
-                                                    item = item,
-                                                    isCurrent = isCurrent,
-                                                    isPlaying = isPlaying,
-                                                    onPlayPause = {
-                                                        if (isCurrent && isPlaying) {
-                                                            viewModel.pauseReading()
-                                                        } else {
-                                                            viewModel.playQueueItemById(item.id)
-                                                            activeTab = 0
+                                            is QueueListItem.TranslatingItem -> {
+                                                val transItem = item.item
+                                                Card(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    colors = CardDefaults.cardColors(
+                                                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                                                    ),
+                                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(12.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        CircularProgressIndicator(
+                                                            modifier = Modifier.size(20.dp),
+                                                            strokeWidth = 2.dp,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                        Spacer(modifier = Modifier.width(12.dp))
+                                                        Column(modifier = Modifier.weight(1f)) {
+                                                            Text(
+                                                                text = transItem.title,
+                                                                style = MaterialTheme.typography.bodyMedium,
+                                                                fontWeight = FontWeight.Bold,
+                                                                maxLines = 1
+                                                            )
+                                                            Text(
+                                                                text = transItem.currentStep ?: appStrings.readerPreparingTranslation,
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = MaterialTheme.colorScheme.primary,
+                                                                fontWeight = FontWeight.Medium,
+                                                                maxLines = 2,
+                                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                            )
                                                         }
-                                                    },
-                                                    onRemove = { viewModel.removeQueueItemById(item.id) },
-                                                    onMoveClick = { itemToMove = item }
+                                                        IconButton(onClick = { viewModel.removeActiveTranslation(transItem.id) }) {
+                                                            Icon(
+                                                                imageVector = Icons.Filled.Close,
+                                                                contentDescription = appStrings.btnCancel,
+                                                                tint = MaterialTheme.colorScheme.outline
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            is QueueListItem.FailedHeader -> {
+                                                Text(
+                                                    text = appStrings.readerTranslatingFailedCount.format(item.count),
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    color = MaterialTheme.colorScheme.error,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
                                                 )
                                             }
-                                        }
-                                    } else {
-                                        // Case: folders is empty, fallback to legacy flat queue items view with drag-drop reordering enabled.
-                                        if (queue.isNotEmpty()) {
-                                            item {
+                                            is QueueListItem.FailedItem -> {
+                                                val transItem = item.item
+                                                Card(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    colors = CardDefaults.cardColors(
+                                                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
+                                                    ),
+                                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f))
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(12.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Column(modifier = Modifier.weight(1f)) {
+                                                            Text(
+                                                                text = transItem.title,
+                                                                style = MaterialTheme.typography.bodyMedium,
+                                                                fontWeight = FontWeight.Bold,
+                                                                maxLines = 1
+                                                            )
+                                                            Text(
+                                                                text = transItem.errorMessage ?: appStrings.readerErrorTitle,
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = MaterialTheme.colorScheme.error,
+                                                                maxLines = 2
+                                                            )
+                                                        }
+                                                        IconButton(onClick = { viewModel.retryTranslation(transItem) }) {
+                                                            Icon(
+                                                                imageVector = Icons.Filled.Refresh,
+                                                                contentDescription = appStrings.btnRetry,
+                                                                tint = MaterialTheme.colorScheme.primary
+                                                            )
+                                                        }
+                                                        IconButton(onClick = { viewModel.removeActiveTranslation(transItem.id) }) {
+                                                            Icon(
+                                                                imageVector = Icons.Filled.Close,
+                                                                contentDescription = appStrings.btnDelete,
+                                                                tint = MaterialTheme.colorScheme.error
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            is QueueListItem.FoldersHeader -> {
                                                 Text(
-                                                    text = appStrings.readerFinishedCount.format(queue.size),
+                                                    text = appStrings.readerFolderCount.format(folders.size),
                                                     style = MaterialTheme.typography.titleSmall,
                                                     color = MaterialTheme.colorScheme.secondary,
                                                     fontWeight = FontWeight.Bold,
                                                     modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
                                                 )
                                             }
-
-                                            items(queue.size, key = { index -> queue[index].id }) { index ->
-                                                val item = queue[index]
-                                                val globalIndex = topItemsCount + index
-                                                val isCurrent = item.id == currentItem?.id
-
+                                            is QueueListItem.FolderHeaderItem -> {
+                                                FolderRow(
+                                                    folder = item.folder,
+                                                    itemCount = item.itemCount,
+                                                    isExpanded = item.isExpanded,
+                                                    onToggleExpand = {
+                                                        expandedFolderIds = if (item.isExpanded) {
+                                                            expandedFolderIds - item.folder.id
+                                                        } else {
+                                                            expandedFolderIds + item.folder.id
+                                                        }
+                                                    },
+                                                    onRename = {
+                                                        folderToRename = item.folder
+                                                        renameFolderName = item.folder.name
+                                                    },
+                                                    onDelete = { folderToDelete = item.folder }
+                                                )
+                                            }
+                                            is QueueListItem.FolderQueueItem -> {
+                                                val qItem = item.item
+                                                val isCurrent = qItem.id == currentItem?.id
                                                 QueueItemCard(
-                                                    item = item,
+                                                    item = qItem,
                                                     isCurrent = isCurrent,
                                                     isPlaying = isPlaying,
                                                     onPlayPause = {
                                                         if (isCurrent && isPlaying) {
                                                             viewModel.pauseReading()
                                                         } else {
-                                                            viewModel.playQueueItemById(item.id)
+                                                            viewModel.playQueueItemById(qItem.id)
                                                             activeTab = 0
                                                         }
                                                     },
-                                                    onRemove = { viewModel.removeQueueItemById(item.id) },
-                                                    onMoveClick = { itemToMove = item },
-                                                    modifier = Modifier.dragItem(globalIndex, dragDropState, enabled = true)
+                                                    onRemove = { viewModel.removeQueueItemById(qItem.id) },
+                                                    onMoveClick = { itemToMove = qItem },
+                                                    modifier = Modifier
+                                                        .padding(start = 16.dp)
+                                                        .dragItem(index, dragDropState, enabled = true)
+                                                )
+                                            }
+                                            is QueueListItem.RootItemsHeader -> {
+                                                Text(
+                                                    text = appStrings.readerRootItemsCount.format(item.count),
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    color = MaterialTheme.colorScheme.secondary,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                                                )
+                                            }
+                                            is QueueListItem.RootQueueItem -> {
+                                                val qItem = item.item
+                                                val isCurrent = qItem.id == currentItem?.id
+                                                QueueItemCard(
+                                                    item = qItem,
+                                                    isCurrent = isCurrent,
+                                                    isPlaying = isPlaying,
+                                                    onPlayPause = {
+                                                        if (isCurrent && isPlaying) {
+                                                            viewModel.pauseReading()
+                                                        } else {
+                                                            viewModel.playQueueItemById(qItem.id)
+                                                            activeTab = 0
+                                                        }
+                                                    },
+                                                    onRemove = { viewModel.removeQueueItemById(qItem.id) },
+                                                    onMoveClick = { itemToMove = qItem },
+                                                    modifier = Modifier.dragItem(index, dragDropState, enabled = true)
+                                                )
+                                            }
+                                            is QueueListItem.FinishedHeader -> {
+                                                Text(
+                                                    text = appStrings.readerFinishedCount.format(item.count),
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    color = MaterialTheme.colorScheme.secondary,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                                                )
+                                            }
+                                            is QueueListItem.FlatQueueItem -> {
+                                                val qItem = item.item
+                                                val isCurrent = qItem.id == currentItem?.id
+                                                QueueItemCard(
+                                                    item = qItem,
+                                                    isCurrent = isCurrent,
+                                                    isPlaying = isPlaying,
+                                                    onPlayPause = {
+                                                        if (isCurrent && isPlaying) {
+                                                            viewModel.pauseReading()
+                                                        } else {
+                                                            viewModel.playQueueItemById(qItem.id)
+                                                            activeTab = 0
+                                                        }
+                                                    },
+                                                    onRemove = { viewModel.removeQueueItemById(qItem.id) },
+                                                    onMoveClick = { itemToMove = qItem },
+                                                    modifier = Modifier.dragItem(index, dragDropState, enabled = true)
                                                 )
                                             }
                                         }
@@ -1737,4 +1802,18 @@ fun QueueItemCard(
             }
         }
     }
+}
+
+sealed class QueueListItem {
+    data class TranslatingHeader(val count: Int) : QueueListItem()
+    data class TranslatingItem(val item: ActiveTranslation) : QueueListItem()
+    data class FailedHeader(val count: Int) : QueueListItem()
+    data class FailedItem(val item: ActiveTranslation) : QueueListItem()
+    object FoldersHeader : QueueListItem()
+    data class FolderHeaderItem(val folder: QueueFolder, val itemCount: Int, val isExpanded: Boolean) : QueueListItem()
+    data class FolderQueueItem(val item: QueueItem, val folderId: String) : QueueListItem()
+    data class RootItemsHeader(val count: Int) : QueueListItem()
+    data class RootQueueItem(val item: QueueItem) : QueueListItem()
+    data class FinishedHeader(val count: Int) : QueueListItem()
+    data class FlatQueueItem(val item: QueueItem) : QueueListItem()
 }

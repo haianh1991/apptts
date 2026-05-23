@@ -972,6 +972,59 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun reorderQueueItems(fromItemId: String, toItemId: String) {
+        val currentList = _queue.value.toMutableList()
+        val fromIndex = currentList.indexOfFirst { it.id == fromItemId }
+        val toIndex = currentList.indexOfFirst { it.id == toItemId }
+        if (fromIndex == -1 || toIndex == -1) return
+        
+        val fromItem = currentList[fromIndex]
+        val toItem = currentList[toIndex]
+        
+        if (fromItem.folderId != toItem.folderId) return
+        
+        val folderId = fromItem.folderId
+        
+        val groupItems = currentList.filter { it.folderId == folderId }.toMutableList()
+        val groupFromIndex = groupItems.indexOfFirst { it.id == fromItemId }
+        val groupToIndex = groupItems.indexOfFirst { it.id == toItemId }
+        if (groupFromIndex == -1 || groupToIndex == -1) return
+        
+        val itemToMove = groupItems.removeAt(groupFromIndex)
+        groupItems.add(groupToIndex, itemToMove)
+        
+        val now = System.currentTimeMillis()
+        if (folderId != null) {
+            for (i in groupItems.indices) {
+                groupItems[i] = groupItems[i].copy(createdAt = now - (groupItems.size - i) * 1000)
+            }
+        } else {
+            for (i in groupItems.indices) {
+                groupItems[i] = groupItems[i].copy(createdAt = now - i * 1000)
+            }
+        }
+        
+        for (item in groupItems) {
+            val idx = currentList.indexOfFirst { it.id == item.id }
+            if (idx != -1) {
+                currentList[idx] = item
+            }
+        }
+        
+        val sortedList = sortQueueItems(currentList, _folders.value)
+        val currentItem = _queue.value.getOrNull(_currentQueueItemIndex.value)
+        
+        _queue.value = sortedList
+        queueRepository.saveQueueData(_folders.value, sortedList)
+        
+        if (currentItem != null) {
+            val newIndex = sortedList.indexOfFirst { it.id == currentItem.id }
+            if (newIndex != -1) {
+                _currentQueueItemIndex.value = newIndex
+            }
+        }
+    }
+
     fun createFolder(name: String): String {
         val folderId = java.util.UUID.randomUUID().toString()
         val newFolder = QueueFolder(
