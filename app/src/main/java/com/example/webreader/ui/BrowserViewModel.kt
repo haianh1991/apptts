@@ -394,7 +394,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                             }
                         }
                     }
-                }
+                },
+                uiLanguage = settings.appDisplayLanguage
             )
 
             _isTranslating.value = false
@@ -578,7 +579,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                             }
                         }
                     }
-                }
+                },
+                uiLanguage = settings.appDisplayLanguage
             )
 
             result.onSuccess { translatedText ->
@@ -838,7 +840,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                             }
                         }
                     }
-                }
+                },
+                uiLanguage = settings.appDisplayLanguage
             )
             
             result.onSuccess { translatedText ->

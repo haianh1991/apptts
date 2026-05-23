@@ -1,7 +1,7 @@
 {
-  "versionCode": 12,
-  "versionName": "1.3.8",
+  "versionCode": 13,
+  "versionName": "1.3.9",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.3.8.apk",
-  "releaseNotes": "Sửa lỗi trôi tiếng Trung ở các chunk sau bằng system instruction và prompt tiếng Anh tối ưu hóa; mở rộng bộ phát hiện lỗi chặn (isBlocked) cho cả ngoại lệ SerializationException/MissingFieldException để tự động kích hoạt chẩn đoán offline từ nhạy cảm."
+  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.3.9.apk",
+  "releaseNotes": "Tự động đồng bộ ngôn ngữ Prompt và System Instruction theo cài đặt ngôn ngữ hiển thị giao diện UI (Tiếng Việt dùng Prompt tiếng Việt, Tiếng Anh/khác dùng Prompt tiếng Anh) và tích hợp ghi nhận chi tiết cấu hình chỉ dẫn cá nhân hóa vào log dịch."
 }
