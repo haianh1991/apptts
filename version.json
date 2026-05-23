@@ -1,7 +1,7 @@
 {
-  "versionCode": 7,
-  "versionName": "1.3.3",
+  "versionCode": 8,
+  "versionName": "1.3.4",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.3.3.apk",
-  "releaseNotes": "Bổ sung các model mới Gemma-4-31b-it, Gemma-4-26b-a4b-it, Gemini 2.5 Flash Lite và loại bỏ model 1.5 cũ."
+  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.3.4.apk",
+  "releaseNotes": "Sửa lỗi kéo thả sắp xếp bản dịch trong hàng chờ và bổ sung tính năng tự động cuộn danh sách (auto-scroll) khi ngón tay di chuyển gần sát mép màn hình."
 }
