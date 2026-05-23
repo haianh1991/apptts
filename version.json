@@ -1,7 +1,7 @@
 {
-  "versionCode": 9,
-  "versionName": "1.3.5",
+  "versionCode": 10,
+  "versionName": "1.3.6",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.3.5.apk",
-  "releaseNotes": "Khắc phục triệt để lỗi kéo thả sắp xếp danh sách bản dịch: Di chuyển cảm biến cử chỉ kéo thả xuống từng thẻ bài viết thay vì LazyColumn để tránh xung đột với hành vi cuộn (scroll) danh sách."
+  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.3.6.apk",
+  "releaseNotes": "Khắc phục lỗi chặn dịch thuật khi sử dụng API Key Gemini Free Tier bằng cách cấu hình bỏ chặn (HarmBlockThreshold.NONE) cho tất cả các danh mục kiểm duyệt nội dung an toàn."
 }

@@ -3,12 +3,22 @@ package com.example.webreader.data
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.RequestOptions
 import com.google.ai.client.generativeai.type.content
+import com.google.ai.client.generativeai.type.HarmCategory
+import com.google.ai.client.generativeai.type.BlockThreshold
+import com.google.ai.client.generativeai.type.SafetySetting
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.seconds
 
 class GeminiManager {
+
+    private val safetySettings = listOf(
+        SafetySetting(HarmCategory.HARASSMENT, BlockThreshold.NONE),
+        SafetySetting(HarmCategory.HATE_SPEECH, BlockThreshold.NONE),
+        SafetySetting(HarmCategory.SEXUALLY_EXPLICIT, BlockThreshold.NONE),
+        SafetySetting(HarmCategory.DANGEROUS_CONTENT, BlockThreshold.NONE)
+    )
 
     suspend fun translateTitle(
         title: String,
@@ -29,6 +39,7 @@ class GeminiManager {
                     modelName = modelName,
                     apiKey = apiKey,
                     requestOptions = RequestOptions(timeout = 15.seconds),
+                    safetySettings = safetySettings,
                     systemInstruction = content {
                         text("Bạn là trợ lý dịch thuật. Hãy dịch tiêu đề chương truyện hoặc bài viết từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, ngắn gọn và chính xác nhất. Chỉ trả về bản dịch tiêu đề, không giải thích, không thêm dấu ngoặc kép hay bất kỳ thông tin nào khác.")
                     }
@@ -136,6 +147,7 @@ class GeminiManager {
                         modelName = modelName,
                         apiKey = apiKey,
                         requestOptions = RequestOptions(timeout = 180.seconds),
+                        safetySettings = safetySettings,
                         systemInstruction = content {
                             text(if (chunkIndex == 0 && !title.isNullOrBlank()) systemInstructionWithTitle else systemInstructionStandard)
                         }
