@@ -51,14 +51,20 @@ class GeminiManager {
         if (apiKeys.isEmpty() || title.isBlank()) return@withContext title
         var currentKeyIndex = 0
         val keysCount = apiKeys.size
-        val isVi = uiLanguage == "vi"
-
-        val instruction = if (isVi) {
-            val srcLangText = if (sourceLang.equals("Auto", ignoreCase = true)) "tự động phát hiện" else sourceLang
-            "Bạn là trợ lý dịch thuật. Hãy dịch tiêu đề chương truyện hoặc bài viết từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, ngắn gọn và chính xác nhất. Chỉ trả về bản dịch tiêu đề, không giải thích, không thêm dấu ngoặc kép hay bất kỳ thông tin nào khác."
-        } else {
-            val srcLangTextEn = if (sourceLang.equals("Auto", ignoreCase = true)) "automatically detected" else sourceLang
-            "You are a professional translation assistant. Translate the chapter or article title from the source language ($srcLangTextEn) into the target language ($targetLang) naturally and concisely. Return ONLY the translated title, without any quotes, explanations, or introductory text."
+        
+        val instruction = when (uiLanguage) {
+            "vi" -> {
+                val srcLangText = if (sourceLang.equals("Auto", ignoreCase = true)) "tự động phát hiện" else sourceLang
+                "Bạn là trợ lý dịch thuật. Hãy dịch tiêu đề chương truyện hoặc bài viết từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, ngắn gọn và chính xác nhất. Chỉ trả về bản dịch tiêu đề, không giải thích, không thêm dấu ngoặc kép hay bất kỳ thông tin nào khác."
+            }
+            "zh" -> {
+                val srcLangTextZh = if (sourceLang.equals("Auto", ignoreCase = true)) "自动检测" else sourceLang
+                "您是翻译助手。请将章节或文章标题从源语言（$srcLangTextZh）自然且简练地翻译为目标语言（$targetLang）。仅返回翻译后的标题，不进行解释，不添加引号或任何其他信息。"
+            }
+            else -> {
+                val srcLangTextEn = if (sourceLang.equals("Auto", ignoreCase = true)) "automatically detected" else sourceLang
+                "You are a professional translation assistant. Translate the chapter or article title from the source language ($srcLangTextEn) into the target language ($targetLang) naturally and concisely. Return ONLY the translated title, without any quotes, explanations, or introductory text."
+            }
         }
 
         for (attempt in 0 until keysCount) {
@@ -119,66 +125,104 @@ class GeminiManager {
         addStep("Khởi chạy tiến trình dịch thuật. Kích thước văn bản gốc: ${text.length} ký tự (khoảng $totalWords từ), chia thành ${chunks.size} phần.")
         addStep("Ngôn ngữ dịch: $sourceLang -> $targetLang")
         addStep("Sử dụng mô hình AI: $modelName")
-        addStep("Ngôn ngữ hiển thị UI: $uiLanguage | Ngôn ngữ Prompt chỉ thị: ${if (uiLanguage == "vi") "Tiếng Việt" else "Tiếng Anh"}")
+        
+        val promptLangName = when (uiLanguage) {
+            "vi" -> "Tiếng Việt"
+            "zh" -> "简体中文 (Chinese)"
+            else -> "Tiếng Anh (English)"
+        }
+        addStep("Ngôn ngữ hiển thị UI: $uiLanguage | Ngôn ngữ Prompt chỉ thị: $promptLangName")
         if (customInstructions.isNotBlank()) {
             addStep("Chỉ dẫn dịch thuật cá nhân hóa: \"$customInstructions\"")
         } else {
             addStep("Chỉ dẫn dịch thuật cá nhân hóa: Không có")
         }
 
-        val isVi = uiLanguage == "vi"
-        val systemInstructionWithTitle = if (isVi) {
-            val srcLangText = if (sourceLang.equals("Auto", ignoreCase = true)) "tự động phát hiện" else sourceLang
-            """
-                Bạn là một trợ lý dịch thuật và trích xuất nội dung thông minh.
-                Nhiệm vụ của bạn là nhận tiêu đề gốc và văn bản thô được trích xuất từ một trang web (có chứa nhiều thành phần thừa như menu điều hướng, quảng cáo xen kẽ, các nút bấm chuyển trang, bình luận bên lề).
-                Hãy thực hiện các bước sau một cách cẩn thận:
-                1. Dịch tiêu đề gốc từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang) một cách tự nhiên.
-                2. Trả về tiêu đề dịch ở dòng đầu tiên dưới định dạng chính xác sau đây:
-                   Title: [Tiêu đề đã dịch]
-                3. Nhận diện phần nội dung bài viết/chương truyện chính trong văn bản thô. Loại bỏ hoàn toàn các thành phần thừa, quảng cáo xen kẽ giữa các câu, các nút bấm (như "Chương sau", "Mục lục", "Trang chủ"), và bình luận không liên quan của độc giả.
-                4. Dịch phần nội dung chính vừa lọc được từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, mượt mà, trôi chảy nhất và chuẩn ngữ cảnh văn học/báo chí của ngôn ngữ đích.${if (customInstructions.isNotBlank()) " Chỉ dẫn thêm: $customInstructions" else ""}
-                5. Giữ nguyên cấu trúc phân đoạn (phân tách rõ ràng bằng các dòng trống \n\n).
-                6. Trả về nội dung dịch bên dưới tiêu đề dịch, cách nhau bởi hai dấu xuống dòng (\n\n). Tuyệt đối không thêm bất kỳ văn bản giới thiệu hay chú thích nào khác (như "Dưới đây là văn bản dịch..."). Chỉ trả về tiêu đề dịch định dạng Title: ... và văn bản dịch sạch của nội dung chính.
-            """.trimIndent()
-        } else {
-            val srcLangTextEn = if (sourceLang.equals("Auto", ignoreCase = true)) "automatically detected" else sourceLang
-            """
-                You are a professional translator and clean content extractor.
-                Your task is to receive the original title and raw text extracted from a webpage (which may contain clutter such as navigation menus, advertisements, page buttons, and irrelevant comments).
-                Please perform the following steps carefully:
-                1. Translate the original title from the source language ($srcLangTextEn) into the target language ($targetLang) naturally and professionally.
-                2. Return the translated title on the first line in this exact format:
-                   Title: [translated title]
-                3. Identify the main content of the article or chapter in the raw text. Completely remove all clutter, including advertisements, navigation links/buttons (such as "Next Chapter", "Table of Contents", "Home"), and irrelevant comments.
-                4. Translate the cleaned main content from the source language ($srcLangTextEn) into the target language ($targetLang) in a natural, smooth, and fluent manner, matching the professional literary or journalistic style of the target language.${if (customInstructions.isNotBlank()) " Additional instructions: $customInstructions" else ""}
-                5. Preserve the paragraph structure (clearly separated by empty lines \n\n).
-                6. Return the translated content below the translated title, separated by two newlines (\n\n). Do NOT include any introductory or explanatory text (such as "Here is the translation..."). Only return the translated title formatted as 'Title: ...' and the clean translated main content.
-            """.trimIndent()
+        val systemInstructionWithTitle = when (uiLanguage) {
+            "vi" -> {
+                val srcLangText = if (sourceLang.equals("Auto", ignoreCase = true)) "tự động phát hiện" else sourceLang
+                """
+                    Bạn là một trợ lý dịch thuật và trích xuất nội dung thông minh.
+                    Nhiệm vụ của bạn là nhận tiêu đề gốc và văn bản thô được trích xuất từ một trang web (có chứa nhiều thành phần thừa như menu điều hướng, quảng cáo xen kẽ, các nút bấm chuyển trang, bình luận bên lề).
+                    Hãy thực hiện các bước sau một cách cẩn thận:
+                    1. Dịch tiêu đề gốc từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang) một cách tự nhiên.
+                    2. Trả về tiêu đề dịch ở dòng đầu tiên dưới định dạng chính xác sau đây:
+                       Title: [Tiêu đề đã dịch]
+                    3. Nhận diện phần nội dung bài viết/chương truyện chính trong văn bản thô. Loại bỏ hoàn toàn các thành phần thừa, quảng cáo xen kẽ giữa các câu, các nút bấm (như "Chương sau", "Mục lục", "Trang chủ"), và bình luận không liên quan của độc giả.
+                    4. Dịch phần nội dung chính vừa lọc được từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, mượt mà, trôi chảy nhất và chuẩn ngữ cảnh văn học/báo chí của ngôn ngữ đích.${if (customInstructions.isNotBlank()) " Chỉ dẫn thêm: $customInstructions" else ""}
+                    5. Giữ nguyên cấu trúc phân đoạn (phân tách rõ ràng bằng các dòng trống \n\n).
+                    6. Trả về nội dung dịch bên dưới tiêu đề dịch, cách nhau bởi hai dấu xuống dòng (\n\n). Tuyệt đối không thêm bất kỳ văn bản giới thiệu hay chú thích nào khác (như "Dưới đây là văn bản dịch..."). Chỉ trả về tiêu đề dịch định dạng Title: ... và văn bản dịch sạch của nội dung chính.
+                """.trimIndent()
+            }
+            "zh" -> {
+                val srcLangTextZh = if (sourceLang.equals("Auto", ignoreCase = true)) "自动检测" else sourceLang
+                """
+                    您是一个智能翻译和内容提取助手。
+                    您的任务是接收原始标题和从网页提取的原始文本（其中可能包含导航菜单、广告、翻页按钮和无关评论等噪点）。
+                    请仔细执行以下步骤：
+                    1. 将原始标题从源语言 ($srcLangTextZh) 自然且专业地翻译为目标语言 ($targetLang)。
+                    2. 在第一行以以下确切格式返回翻译后的标题：
+                       Title: [翻译后的标题]
+                    3. 识别原始文本中文章或章节的主体内容。完全过滤并移除所有噪点，包括广告、导航链接/按钮（如“下一章”、“目录”、“首页”）以及无关评论。
+                    4. 将过滤后的主体内容从源语言 ($srcLangTextZh) 自然、通顺且流畅地翻译为目标语言 ($targetLang)，并匹配目标语言的文学或新闻等专业文体特点。${if (customInstructions.isNotBlank()) " 附加说明：$customInstructions" else ""}
+                    5. 保留段落结构（使用空行 \n\n 明确分隔）。
+                    6. 在翻译后的标题下方返回翻译内容，用两个换行符 (\n\n) 分隔。不要包含任何介绍性或解释性文本（例如“以下是翻译内容...”）。仅返回格式为 'Title: ...' 的翻译标题和干净的主体翻译内容。
+                """.trimIndent()
+            }
+            else -> {
+                val srcLangTextEn = if (sourceLang.equals("Auto", ignoreCase = true)) "automatically detected" else sourceLang
+                """
+                    You are a professional translator and clean content extractor.
+                    Your task is to receive the original title and raw text extracted from a webpage (which may contain clutter such as navigation menus, advertisements, page buttons, and irrelevant comments).
+                    Please perform the following steps carefully:
+                    1. Translate the original title from the source language ($srcLangTextEn) into the target language ($targetLang) naturally and professionally.
+                    2. Return the translated title on the first line in this exact format:
+                       Title: [translated title]
+                    3. Identify the main content of the article or chapter in the raw text. Completely remove all clutter, including advertisements, navigation links/buttons (such as "Next Chapter", "Table of Contents", "Home"), and irrelevant comments.
+                    4. Translate the cleaned main content from the source language ($srcLangTextEn) into the target language ($targetLang) in a natural, smooth, and fluent manner, matching the professional literary or journalistic style of the target language.${if (customInstructions.isNotBlank()) " Additional instructions: $customInstructions" else ""}
+                    5. Preserve the paragraph structure (clearly separated by empty lines \n\n).
+                    6. Return the translated content below the translated title, separated by two newlines (\n\n). Do NOT include any introductory or explanatory text (such as "Here is the translation..."). Only return the translated title formatted as 'Title: ...' and the clean translated main content.
+                """.trimIndent()
+            }
         }
 
-        val systemInstructionStandard = if (isVi) {
-            val srcLangText = if (sourceLang.equals("Auto", ignoreCase = true)) "tự động phát hiện" else sourceLang
-            """
-                Bạn là một trợ lý dịch thuật và trích xuất nội dung thông minh.
-                Nhiệm vụ của bạn là nhận văn bản thô được trích xuất từ một trang web (có chứa nhiều thành phần thừa như menu điều hướng, quảng cáo xen kẽ, các nút bấm chuyển trang, bình luận bên lề).
-                Hãy thực hiện các bước sau một cách cẩn thận:
-                1. Nhận diện phần nội dung bài viết/chương truyện chính trong văn bản thô. Loại bỏ hoàn toàn các thành phần thừa, quảng cáo xen kẽ giữa các câu, các nút bấm (như "Chương sau", "Mục lục", "Trang chủ"), và bình luận không liên quan của độc giả.
-                2. Dịch phần nội dung chính vừa lọc được từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, mượt mà, trôi chảy nhất và chuẩn ngữ cảnh văn học/báo chí của ngôn ngữ đích.${if (customInstructions.isNotBlank()) " Chỉ dẫn thêm: $customInstructions" else ""}
-                3. Giữ nguyên cấu trúc phân đoạn (phân tách rõ ràng bằng các dòng trống \n\n).
-                4. Tuyệt đối không thêm bất kỳ văn bản giới thiệu hay chú thích nào khác (như "Dưới đây là văn bản dịch..."). Chỉ trả về văn bản dịch sạch của nội dung chính.
-            """.trimIndent()
-        } else {
-            val srcLangTextEn = if (sourceLang.equals("Auto", ignoreCase = true)) "automatically detected" else sourceLang
-            """
-                You are a professional translator and clean content extractor.
-                Your task is to receive raw text extracted from a webpage (which may contain clutter such as navigation menus, advertisements, page buttons, and irrelevant comments).
-                Please perform the following steps carefully:
-                1. Identify the main content of the article or chapter in the raw text. Completely remove all clutter, including advertisements, navigation links/buttons (such as "Next Chapter", "Table of Contents", "Home"), and irrelevant comments.
-                2. Translate the cleaned main content from the source language ($srcLangTextEn) into the target language ($targetLang) in a natural, smooth, and fluent manner, matching the professional literary or journalistic style of the target language.${if (customInstructions.isNotBlank()) " Additional instructions: $customInstructions" else ""}
-                3. Preserve the paragraph structure (clearly separated by empty lines \n\n).
-                4. Do NOT include any introductory or explanatory text (such as "Here is the translation..."). Only return the clean translated main content.
-            """.trimIndent()
+        val systemInstructionStandard = when (uiLanguage) {
+            "vi" -> {
+                val srcLangText = if (sourceLang.equals("Auto", ignoreCase = true)) "tự động phát hiện" else sourceLang
+                """
+                    Bạn là một trợ lý dịch thuật và trích xuất nội dung thông minh.
+                    Nhiệm vụ của bạn là nhận văn bản thô được trích xuất từ một trang web (có chứa nhiều thành phần thừa như menu điều hướng, quảng cáo xen kẽ, các nút bấm chuyển trang, bình luận bên lề).
+                    Hãy thực hiện các bước sau một cách cẩn thận:
+                    1. Nhận diện phần nội dung bài viết/chương truyện chính trong văn bản thô. Loại bỏ hoàn toàn các thành phần thừa, quảng cáo xen kẽ giữa các câu, các nút bấm (như "Chương sau", "Mục lục", "Trang chủ"), và bình luận không liên quan của độc giả.
+                    2. Dịch phần nội dung chính vừa lọc được từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, mượt mà, trôi chảy nhất và chuẩn ngữ cảnh văn học/báo chí của ngôn ngữ đích.${if (customInstructions.isNotBlank()) " Chỉ dẫn thêm: $customInstructions" else ""}
+                    3. Giữ nguyên cấu trúc phân đoạn (phân tách rõ ràng bằng các dòng trống \n\n).
+                    4. Tuyệt đối không thêm bất kỳ văn bản giới thiệu hay chú thích nào khác (như "Dưới đây là văn bản dịch..."). Chỉ trả về văn bản dịch sạch của nội dung chính.
+                """.trimIndent()
+            }
+            "zh" -> {
+                val srcLangTextZh = if (sourceLang.equals("Auto", ignoreCase = true)) "自动检测" else sourceLang
+                """
+                    您是一个智能翻译和内容提取助手。
+                    您的任务是接收从网页提取的原始文本（其中可能包含导航菜单、广告、翻页按钮和无关评论等噪点）。
+                    请仔细执行以下步骤：
+                    1. 识别原始文本中文章或章节的主体内容。完全过滤并移除所有噪点，包括广告、导航链接/按钮（如“下一章”、“目录”、“首页”）以及无关评论。
+                    2. 将过滤后的主体内容从源语言 ($srcLangTextZh) 自然、通顺且流畅地翻译为目标语言 ($targetLang)，并匹配目标语言的文学或新闻等专业文体特点。${if (customInstructions.isNotBlank()) " 附加说明：$customInstructions" else ""}
+                    3. 保留段落结构（使用空行 \n\n 明确分隔）。
+                    4. 不要包含任何介绍性或解释性文本（例如“以下是翻译内容...”）。仅返回干净的主体翻译内容。
+                """.trimIndent()
+            }
+            else -> {
+                val srcLangTextEn = if (sourceLang.equals("Auto", ignoreCase = true)) "automatically detected" else sourceLang
+                """
+                    You are a professional translator and clean content extractor.
+                    Your task is to receive raw text extracted from a webpage (which may contain clutter such as navigation menus, advertisements, page buttons, and irrelevant comments).
+                    Please perform the following steps carefully:
+                    1. Identify the main content of the article or chapter in the raw text. Completely remove all clutter, including advertisements, navigation links/buttons (such as "Next Chapter", "Table of Contents", "Home"), and irrelevant comments.
+                    2. Translate the cleaned main content from the source language ($srcLangTextEn) into the target language ($targetLang) in a natural, smooth, and fluent manner, matching the professional literary or journalistic style of the target language.${if (customInstructions.isNotBlank()) " Additional instructions: $customInstructions" else ""}
+                    3. Preserve the paragraph structure (clearly separated by empty lines \n\n).
+                    4. Do NOT include any introductory or explanatory text (such as "Here is the translation..."). Only return the clean translated main content.
+                """.trimIndent()
+            }
         }
 
         val translatedChunks = mutableListOf<String>()
@@ -222,40 +266,64 @@ class GeminiManager {
                     )
 
                     val prompt = if (chunkIndex == 0 && !title.isNullOrBlank()) {
-                        if (isVi) {
-                            """
-                                Tiêu đề gốc cần dịch:
-                                $title
-                                
-                                Dưới đây là văn bản trang web cần dịch sang ngôn ngữ đích ($targetLang):
-                                
-                                $chunk
-                            """.trimIndent()
-                        } else {
-                            """
-                                Original title to translate:
-                                $title
-                                
-                                Here is the raw webpage text to translate into $targetLang:
-                                
-                                $chunk
-                            """.trimIndent()
+                        when (uiLanguage) {
+                            "vi" -> {
+                                """
+                                    Tiêu đề gốc cần dịch:
+                                    $title
+                                    
+                                    Dưới đây là văn bản trang web cần dịch sang ngôn ngữ đích ($targetLang):
+                                    
+                                    $chunk
+                                """.trimIndent()
+                            }
+                            "zh" -> {
+                                """
+                                    要翻译的原始标题：
+                                    $title
+                                    
+                                    以下是要翻译为 $targetLang 的网页原始文本：
+                                    
+                                    $chunk
+                                """.trimIndent()
+                            }
+                            else -> {
+                                """
+                                    Original title to translate:
+                                    $title
+                                    
+                                    Here is the raw webpage text to translate into $targetLang:
+                                    
+                                    $chunk
+                                """.trimIndent()
+                            }
                         }
                     } else {
-                        if (isVi) {
-                            val srcLangText = if (sourceLang.equals("Auto", ignoreCase = true)) "tự động phát hiện" else sourceLang
-                            """
-                                Hãy dịch văn bản thô dưới đây từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang). Hãy lọc bỏ các thành phần quảng cáo hoặc nút điều hướng nếu có, dịch sát nghĩa và tự nhiên nhất:
-                                
-                                $chunk
-                            """.trimIndent()
-                        } else {
-                            val srcLangTextEn = if (sourceLang.equals("Auto", ignoreCase = true)) "automatically detected" else sourceLang
-                            """
-                                Please translate the following raw text from the source language ($srcLangTextEn) into the target language ($targetLang). Filter out any advertisements or navigation links if present, and translate the core content naturally and professionally:
-                                
-                                $chunk
-                            """.trimIndent()
+                        when (uiLanguage) {
+                            "vi" -> {
+                                val srcLangText = if (sourceLang.equals("Auto", ignoreCase = true)) "tự động phát hiện" else sourceLang
+                                """
+                                    Hãy dịch văn bản thô dưới đây từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang). Hãy lọc bỏ các thành phần quảng cáo hoặc nút điều hướng nếu có, dịch sát nghĩa và tự nhiên nhất:
+                                    
+                                    $chunk
+                                """.trimIndent()
+                            }
+                            "zh" -> {
+                                val srcLangTextZh = if (sourceLang.equals("Auto", ignoreCase = true)) "自动检测" else sourceLang
+                                """
+                                    请将以下原始文本从源语言 ($srcLangTextZh) 翻译为目标语言 ($targetLang)。如果存在任何广告或导航链接，请进行过滤，并自然且专业地翻译核心内容：
+                                    
+                                    $chunk
+                                """.trimIndent()
+                            }
+                            else -> {
+                                val srcLangTextEn = if (sourceLang.equals("Auto", ignoreCase = true)) "automatically detected" else sourceLang
+                                """
+                                    Please translate the following raw text from the source language ($srcLangTextEn) into the target language ($targetLang). Filter out any advertisements or navigation links if present, and translate the core content naturally and professionally:
+                                    
+                                    $chunk
+                                """.trimIndent()
+                            }
                         }
                     }
 
