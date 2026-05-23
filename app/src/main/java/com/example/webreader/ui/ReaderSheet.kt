@@ -628,8 +628,7 @@ fun ReaderSheet(
                                     state = dragDropListState,
                                     modifier = Modifier
                                         .weight(1f)
-                                        .fillMaxWidth()
-                                        .dragContainer(dragDropState, enabled = folders.isEmpty()),
+                                        .fillMaxWidth(),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     // SECTION 1: Translating Items
@@ -1389,18 +1388,15 @@ class DragDropState(
     val draggedIndex: Int?
         get() = initiallyDraggedElement?.index
 
-    fun onDragStart(offset: Offset) {
+    fun onDragStart(itemIndex: Int, offset: Offset) {
         lazyListState.layoutInfo.visibleItemsInfo
-            .firstOrNull { item ->
-                val y = offset.y.toInt()
-                y in item.offset..(item.offset + item.size)
-            }
+            .firstOrNull { it.index == itemIndex }
             .also { item ->
                 if (item != null && isDraggable(item.index)) {
                     initiallyDraggedElement = item
                     currentDraggedElement = item
-                    currentPointerOffset = offset
-                    clickOffset = offset.y - item.offset
+                    currentPointerOffset = Offset(offset.x, item.offset + offset.y)
+                    clickOffset = offset.y
                     draggedDistance = 0f
                 }
             }
@@ -1517,24 +1513,6 @@ fun rememberDragDropState(
     }
 }
 
-fun Modifier.dragContainer(
-    dragDropState: DragDropState,
-    enabled: Boolean = true
-): Modifier {
-    if (!enabled) return this
-    return this.pointerInput(dragDropState) {
-        detectDragGesturesAfterLongPress(
-            onDragStart = { offset -> dragDropState.onDragStart(offset) },
-            onDragEnd = { dragDropState.onDragInterrupted() },
-            onDragCancel = { dragDropState.onDragInterrupted() },
-            onDrag = { change, dragAmount ->
-                change.consume()
-                dragDropState.onDrag(dragAmount)
-            }
-        )
-    }
-}
-
 fun Modifier.dragItem(
     itemIndex: Int,
     dragDropState: DragDropState,
@@ -1543,10 +1521,24 @@ fun Modifier.dragItem(
     if (!enabled) return this
     val draggedIndex = dragDropState.draggedIndex
     val isDragging = draggedIndex == itemIndex
+    
     return this
         .zIndex(if (isDragging) 1f else 0f)
         .graphicsLayer {
             translationY = if (isDragging) dragDropState.draggedDistance else 0f
+        }
+        .pointerInput(dragDropState, itemIndex) {
+            detectDragGesturesAfterLongPress(
+                onDragStart = { offset -> 
+                    dragDropState.onDragStart(itemIndex, offset) 
+                },
+                onDragEnd = { dragDropState.onDragInterrupted() },
+                onDragCancel = { dragDropState.onDragInterrupted() },
+                onDrag = { change, dragAmount ->
+                    change.consume()
+                    dragDropState.onDrag(dragAmount)
+                }
+            )
         }
 }
 
