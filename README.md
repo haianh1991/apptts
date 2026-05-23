@@ -48,7 +48,137 @@
 #### 7. Đa ngôn ngữ giao diện (UI Display Language)
 - Hỗ trợ đổi ngôn ngữ hiển thị của ứng dụng sang **Tiếng Việt**, **Tiếng Anh (English)** hoặc **Tiếng Trung (简体中文)** ở màn hình đăng nhập và trong phần Cài đặt.
 
+### 📖 Hướng Dẫn Sử Dụng Chi Tiết
+
+Chào mừng bạn đến với **WebAITransTTS** - Trình duyệt dịch thuật AI thông minh và Đọc sách bằng giọng đọc TTS (Text-to-Speech) nền chất lượng cao. Dưới đây là hướng dẫn chi tiết từng bước để bạn nhanh chóng làm chủ và khai thác tối đa mọi tính năng của ứng dụng.
+
 ---
+
+#### 1. Giao Diện Chính & Trình Duyệt Web
+
+Khi khởi động ứng dụng, bạn sẽ được đưa đến màn hình trình duyệt tích hợp. Tại đây, bạn có thể lướt web, đọc báo, hoặc truy cập các trang truyện chữ yêu thích.
+
+![Màn hình chính của ứng dụng](images/screencap_browser.png)
+
+**Các thành phần chính trên thanh công cụ:**
+*   **Thanh nhập địa chỉ (URL Bar):** Cho phép nhập nhanh địa chỉ trang web hoặc tìm kiếm thông tin. Thanh nhập được thiết kế bo góc mềm mại, hiển thị tiến trình tải trang và có nút xóa nhanh văn bản khi bạn đang chỉnh sửa.
+*   **Nút Đánh dấu trang (Biểu tượng Ngôi sao):** Bấm để lưu nhanh trang web hiện tại vào danh mục Yêu thích. Ngôi sao sẽ sáng màu vàng Gold khi trang đã được lưu.
+*   **Menu tùy chọn (Biểu tượng 3 chấm dọc):** Mở ra menu nhanh bao gồm các lệnh:
+    *   *Tải lại trang:* Làm mới nội dung web.
+    *   *Dịch trang web:* Kích hoạt dịch toàn bộ trang web sang Tiếng Việt bằng công cụ dịch của Google Translate.
+    *   *Cài đặt:* Truy cập sâu vào cấu hình hệ thống.
+*   **Nút Dịch thuật nổi (FAB Translate ở góc dưới bên phải):** Công cụ lõi dùng để trích xuất văn bản thô từ trang truyện, trang báo hiện tại để dịch bằng trí tuệ nhân tạo (Gemini AI).
+
+![Menu tùy chọn nhanh của trình duyệt](images/screencap_menu.png)
+
+---
+
+#### 2. Thiết Lập & Cấu Hình Ứng Dụng (Settings)
+
+Để cá nhân hóa trải nghiệm đọc và dịch thuật, hãy truy cập vào **Cài đặt ứng dụng** từ Menu tùy chọn. Giao diện cài đặt được phân chia thành các thẻ thông tin (Card) trực quan.
+
+##### Phần A: Tài khoản, Ngôn ngữ và Gemini API
+
+![Cấu hình Tài khoản và Gemini API](images/screencap_settings.png)
+
+1.  **Tài khoản người dùng:** Đăng nhập bằng tài khoản Google để kích hoạt đồng bộ hóa đám mây các cài đặt cá nhân, danh sách hàng chờ đọc và dữ liệu của bạn.
+2.  **Ngôn ngữ hiển thị:** Bạn có thể chuyển đổi linh hoạt ngôn ngữ hiển thị của toàn bộ ứng dụng giữa 3 ngôn ngữ chính: **Tiếng Việt**, **Tiếng Anh (English)** và **Tiếng Trung (简体中文)**. Khi thay đổi, hệ thống chỉ dẫn (System Instructions) gửi sang AI cũng sẽ tự động đồng bộ hóa tương ứng.
+3.  **Cấu hình Gemini API:**
+    *   *Gemini API Key:* Nhập khóa API của bạn từ Google AI Studio. 
+    *   > [!NOTE]
+        > **Hướng dẫn nhanh cách lấy Gemini API Key miễn phí:**
+        > 1. Truy cập vào trang quản lý [Google AI Studio](https://aistudio.google.com/).
+        > 2. Đăng nhập bằng tài khoản Google của bạn.
+        > 3. Nhấp vào nút **"Get API key"** (Lấy khóa API) ở góc trên bên trái.
+        > 4. Chọn **"Create API key"** (Tạo khóa API) -> Chọn dự án Google Cloud có sẵn hoặc tạo mới một dự án mặc định.
+        > 5. Sao chép (Copy) chuỗi API Key vừa tạo (thường bắt đầu bằng `AIzaSy...`).
+    *   > [!TIP]
+        > Ứng dụng hỗ trợ cấu hình **nhiều khóa API cùng lúc** (phân tách nhau bởi dấu phẩy `,` hoặc ngắt dòng). Hệ thống sẽ tự động xoay vòng sang khóa tiếp theo nếu khóa hiện tại gặp lỗi giới hạn lượt dùng (quota limit).
+    *   *Mô hình AI:* Lựa chọn mô hình AI tối ưu cho tốc độ và chất lượng dịch thuật (mặc định khuyến nghị: `gemini-2.5-flash` hoặc các phiên bản flash-lite để tiết kiệm chi phí).
+
+##### Phần B: Cài Đặt Dịch Thuật Cá Nhân Hóa & Giọng Đọc TTS
+
+Cuộn xuống phía dưới màn hình Cài đặt để tiếp cận cấu hình nâng cao cho việc chuyển dịch văn phong và công cụ đọc thành tiếng.
+
+![Cấu hình dịch nâng cao và giọng đọc TTS](images/screencap_settings_scrolled.png)
+
+1.  **Cấu hình Dịch thuật:**
+    *   *Ngôn ngữ nguồn / đích:* Thiết lập ngôn ngữ gốc của trang web (hoặc chọn Auto để tự động nhận diện) và ngôn ngữ muốn dịch ra.
+    *   *Chỉ dẫn dịch thuật cá nhân hóa (Custom Instructions):* Đây là tính năng độc đáo giúp bạn ra lệnh riêng cho AI. Bạn có thể yêu cầu AI dịch truyện theo văn phong Hán-Việt cổ, giữ nguyên danh xưng (ta - ngươi, tỷ - muội, đại ca...) hoặc định hình phong cách hành văn mượt mà, văn học hơn.
+2.  **Cài đặt giọng đọc (TTS):**
+    *   *Công cụ giọng đọc (TTS Engine):* Lựa chọn bộ máy phát âm trên điện thoại (ví dụ: Google TTS Engine).
+    *   *Tốc độ đọc & Cao độ giọng:* Sử dụng thanh trượt để điều chỉnh tốc độ nói nhanh/chậm và cao độ thanh/trầm của giọng nói. Bạn có thể nhấn biểu tượng vòng lặp kế bên để khôi phục nhanh về mặc định (1.0x).
+    *   *Nghe thử giọng đọc:* Nhấn nút để kiểm tra thử chất lượng giọng nói trước khi áp dụng chính thức.
+3.  **Nhật ký dịch thuật:** Hiển thị lịch sử hoạt động dịch để bạn tiện theo dõi tiến trình.
+4.  **Lưu thiết lập:** Đừng quên nhấn nút **Lưu thiết lập** ở dưới cùng để áp dụng mọi thay đổi!
+
+---
+
+#### 3. Trích Xuất & Dịch Thuật Thông Minh
+
+Khi bạn đang ở một chương truyện chữ hoặc một bài báo cần dịch, hãy nhấn vào nút **FAB Translate (Dịch trang web)** màu xanh ở góc phải bên dưới màn hình chính. Ứng dụng sẽ tự động phân tích trang web, loại bỏ các thành phần rác (quảng cáo, thanh điều hướng, comment...) và hiển thị hộp thoại lựa chọn:
+
+![Dialog tùy chọn chế độ đọc và lưu trữ](images/screencap_dialog.png)
+
+*   **Lưu vào thư mục:** Bạn có thể chọn lưu bản dịch vào **Thư mục gốc** hoặc chọn/tạo một thư mục cụ thể để phân loại các chương truyện gọn gàng.
+*   **Đọc ngay:** Ứng dụng sẽ tiến hành dịch ngay lập tức bằng Gemini AI và đưa bạn vào giao diện đọc/nghe truyện trực tiếp.
+*   **Thêm vào hàng chờ:** Đưa chương truyện vào hàng chờ dịch thuật dưới nền. Phù hợp khi bạn muốn chuẩn bị sẵn nhiều chương truyện để nghe liên tục mà không cần chờ đợi dịch từng chương một.
+
+---
+
+#### 4. Quản Lý Hàng Chờ & Thư Viện Đọc (Reader Sheet)
+
+Nhấn vào nút **Danh sách (List FAB)** nổi ở góc dưới bên phải màn hình chính để mở bảng quản lý hàng chờ đọc truyện (kéo từ dưới lên). 
+
+Nếu bạn chưa thiết lập API Key hoặc hệ thống gặp sự cố, bảng hàng chờ sẽ hiển thị thông tin cảnh báo trực quan kèm nút truy cập nhanh để khắc phục:
+
+![Bảng Hàng chờ và Thư viện đọc sách](images/screencap_queue.png)
+
+**Các tab tính năng chính trong Thư viện:**
+1.  **Nội dung:** Hiển thị danh sách các chương truyện đang nằm trong hàng chờ, trạng thái dịch thuật cục bộ từng chương. Bạn có thể thực hiện thao tác **nhấn giữ kéo thả** để thay đổi thứ tự đọc, hoặc sắp xếp các bài viết ra/vào thư mục một cách dễ dàng.
+2.  **Đã dịch:** Danh sách các chương đã dịch thành công, sẵn sàng để đọc offline hoặc nghe giọng đọc TTS bất kỳ lúc nào.
+3.  **Đánh dấu:** Quản lý các chương/trang web bạn đã gắn ngôi sao yêu thích để truy cập lại nhanh chóng.
+
+> [!IMPORTANT]
+> **Cơ chế Tự phục hồi Lỗi (Fault Tolerance):**
+> Trong quá trình dịch dưới nền bằng Gemini AI, nếu một phân đoạn (chunk) truyện bị chặn bởi bộ lọc an toàn của Google trên tất cả các API Key hiện có của bạn:
+> *   Ứng dụng sẽ **không** hủy bỏ toàn bộ chương truyện.
+> *   Nó sẽ tự động chèn phân đoạn văn bản gốc tiếng Trung kèm cảnh báo lỗi trực tiếp vào giao diện đọc, đồng thời tiếp tục dịch các phần tiếp theo bình thường.
+> *   Ứng dụng cũng hỗ trợ công cụ chẩn đoán offline giúp bạn biết chính xác đoạn văn bản nào đang nghi ngờ bị chặn dịch để bạn dễ dàng theo dõi.
+
+---
+
+#### 5. Minh Họa Thực Tế: Kiểm Thử Dịch Thuật Với Truyện Chữ
+
+Dưới đây là hình ảnh thực tế ghi lại quá trình dịch thuật chương truyện từ trang **uukanshu.cc** bằng chính API Key và liên kết được kiểm thử thành công:
+
+##### Bước A: Tải Trang Truyện Gốc (Tiếng Trung)
+Trình duyệt hiển thị nội dung gốc tiếng Trung của truyện chữ trước khi dịch.
+
+![Trang gốc tiếng Trung](images/screencap_load_novel.png)
+
+##### Bước B: Chọn Chế Độ Đọc
+Khi nhấn nút dịch nổi ở góc phải bên dưới, hộp thoại chọn thư mục và chế độ đọc "Đọc ngay" hiện ra.
+
+![Hộp thoại chọn chế độ đọc](images/screencap_dialog.png)
+
+##### Bước C: Quá Trình Dịch Nền Của Gemini AI
+Ứng dụng sử dụng API Key để dịch song song từng phần (các ký tự khóa được ẩn an toàn dưới dạng `AIzaSy...M7sA` để bảo mật):
+
+![Đang dịch nền bằng Gemini AI](images/screencap_trans.png)
+
+##### Bước D: Đọc Truyện Đã Dịch Sang Tiếng Việt
+Sau khi dịch xong, nội dung truyện được hiển thị bằng tiếng Việt chuẩn văn phong tiểu thuyết, kết hợp giọng đọc TTS phát tự động:
+
+![Đọc truyện đã dịch sang tiếng Việt](images/screencap_test_trans.png)
+
+##### Bước E: Danh Sách Bài Viết Đã Dịch Trong Thư Viện
+Chương truyện dịch hoàn tất được lưu vào mục **Đã dịch** với tiêu đề tiếng Việt chuẩn xác cùng số lượng phân đoạn đã xử lý:
+
+![Danh sách bài viết đã dịch](images/screencap_trans_tab.png)
+
+---
+
 
 ## <a name="english"></a>🇺🇸 English - AI Translation & TTS Web Reader Browser
 
