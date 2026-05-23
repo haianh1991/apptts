@@ -73,8 +73,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -525,11 +527,35 @@ fun ReaderSheet(
                                            (if (queue.isNotEmpty()) 1 else 0)
 
                         val dragDropListState = rememberLazyListState()
-                        val dragDropState = rememberDragDropState(dragDropListState) { fromIndex, toIndex ->
-                            val queueStartIndex = topItemsCount
-                            val queueEndIndex = topItemsCount + queue.size
-                            if (fromIndex in queueStartIndex until queueEndIndex && toIndex in queueStartIndex until queueEndIndex) {
-                                viewModel.reorderQueue(fromIndex - queueStartIndex, toIndex - queueStartIndex)
+                        val dragDropState = rememberDragDropState(
+                            lazyListState = dragDropListState,
+                            isDraggable = { index ->
+                                val queueStartIndex = topItemsCount
+                                val queueEndIndex = topItemsCount + queue.size
+                                index in queueStartIndex until queueEndIndex
+                            },
+                            onMove = { fromIndex, toIndex ->
+                                val queueStartIndex = topItemsCount
+                                val queueEndIndex = topItemsCount + queue.size
+                                if (fromIndex in queueStartIndex until queueEndIndex && toIndex in queueStartIndex until queueEndIndex) {
+                                    viewModel.reorderQueue(fromIndex - queueStartIndex, toIndex - queueStartIndex)
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                        )
+
+                        LaunchedEffect(dragDropState.initiallyDraggedElement) {
+                            if (dragDropState.initiallyDraggedElement != null) {
+                                while (true) {
+                                    val scrollAmount = dragDropState.checkAutoScroll()
+                                    if (scrollAmount != 0f) {
+                                        dragDropListState.scrollBy(scrollAmount)
+                                        dragDropState.checkSwapsAfterScroll()
+                                    }
+                                    kotlinx.coroutines.delay(10)
+                                }
                             }
                         }
 
@@ -1343,7 +1369,8 @@ fun ReaderSheet(
 // Drag and drop helper state & modifiers for LazyColumn
 class DragDropState(
     val lazyListState: LazyListState,
-    private val onMove: (Int, Int) -> Unit
+    private val isDraggable: (Int) -> Boolean,
+    private val onMove: (Int, Int) -> Boolean
 ) {
     var draggedDistance by mutableFloatStateOf(0f)
         private set
@@ -1352,6 +1379,11 @@ class DragDropState(
         private set
 
     var currentDraggedElement by mutableStateOf<LazyListItemInfo?>(null)
+        private set
+
+    private var clickOffset = 0f
+
+    var currentPointerOffset by mutableStateOf(Offset.Zero)
         private set
 
     val draggedIndex: Int?
@@ -1363,9 +1395,14 @@ class DragDropState(
                 val y = offset.y.toInt()
                 y in item.offset..(item.offset + item.size)
             }
-            .also {
-                initiallyDraggedElement = it
-                currentDraggedElement = it
+            .also { item ->
+                if (item != null && isDraggable(item.index)) {
+                    initiallyDraggedElement = item
+                    currentDraggedElement = item
+                    currentPointerOffset = offset
+                    clickOffset = offset.y - item.offset
+                    draggedDistance = 0f
+                }
             }
     }
 
@@ -1373,32 +1410,92 @@ class DragDropState(
         initiallyDraggedElement = null
         currentDraggedElement = null
         draggedDistance = 0f
+        currentPointerOffset = Offset.Zero
+        clickOffset = 0f
     }
 
-    fun onDrag(offset: Offset) {
-        draggedDistance += offset.y
-        
+    fun onDrag(dragAmount: Offset) {
         val initiallyDragged = initiallyDraggedElement ?: return
-        val currentStart = initiallyDragged.offset + draggedDistance
-        val currentEnd = initiallyDragged.offset + initiallyDragged.size + draggedDistance
+        currentPointerOffset += dragAmount
         
+        val currentStart = currentPointerOffset.y - clickOffset
+        val currentEnd = currentStart + initiallyDragged.size
+        
+        draggedDistance = currentStart - initiallyDragged.offset
+
         val targetElement = lazyListState.layoutInfo.visibleItemsInfo
             .firstOrNull { item ->
+                if (item.index == initiallyDragged.index) return@firstOrNull false
                 val itemStart = item.offset
                 val itemEnd = item.offset + item.size
-                if (draggedDistance > 0) {
-                    currentEnd > itemStart + item.size / 2 && initiallyDragged.index < item.index
+                if (initiallyDragged.index < item.index) {
+                    currentEnd > itemStart + item.size / 2
                 } else {
-                    currentStart < itemEnd - item.size / 2 && initiallyDragged.index > item.index
+                    currentStart < itemEnd - item.size / 2
                 }
             }
             
         if (targetElement != null) {
             val fromIndex = initiallyDragged.index
             val toIndex = targetElement.index
-            onMove(fromIndex, toIndex)
-            initiallyDraggedElement = targetElement
-            draggedDistance = currentStart - targetElement.offset
+            if (onMove(fromIndex, toIndex)) {
+                initiallyDraggedElement = targetElement
+                draggedDistance = currentStart - targetElement.offset
+            }
+        }
+    }
+
+    fun checkAutoScroll(): Float {
+        if (initiallyDraggedElement == null) return 0f
+        val pointerY = currentPointerOffset.y
+        val viewportHeight = lazyListState.layoutInfo.viewportSize.height.toFloat()
+        
+        val threshold = 150f // px
+        val maxScrollSpeed = 20f
+        
+        return when {
+            pointerY < threshold -> {
+                val ratio = (threshold - pointerY) / threshold
+                -maxScrollSpeed * ratio.coerceIn(0f, 1f)
+            }
+            pointerY > viewportHeight - threshold -> {
+                val ratio = (pointerY - (viewportHeight - threshold)) / threshold
+                maxScrollSpeed * ratio.coerceIn(0f, 1f)
+            }
+            else -> 0f
+        }
+    }
+
+    fun checkSwapsAfterScroll() {
+        val initiallyDragged = initiallyDraggedElement ?: return
+        val currentStart = currentPointerOffset.y - clickOffset
+        val currentEnd = currentStart + initiallyDragged.size
+        
+        val currentElement = lazyListState.layoutInfo.visibleItemsInfo
+            .firstOrNull { it.index == initiallyDragged.index }
+        if (currentElement != null) {
+            draggedDistance = currentStart - currentElement.offset
+        }
+        
+        val targetElement = lazyListState.layoutInfo.visibleItemsInfo
+            .firstOrNull { item ->
+                if (item.index == initiallyDragged.index) return@firstOrNull false
+                val itemStart = item.offset
+                val itemEnd = item.offset + item.size
+                if (initiallyDragged.index < item.index) {
+                    currentEnd > itemStart + item.size / 2
+                } else {
+                    currentStart < itemEnd - item.size / 2
+                }
+            }
+            
+        if (targetElement != null) {
+            val fromIndex = initiallyDragged.index
+            val toIndex = targetElement.index
+            if (onMove(fromIndex, toIndex)) {
+                initiallyDraggedElement = targetElement
+                draggedDistance = currentStart - targetElement.offset
+            }
         }
     }
 }
@@ -1406,10 +1503,17 @@ class DragDropState(
 @Composable
 fun rememberDragDropState(
     lazyListState: LazyListState,
-    onMove: (Int, Int) -> Unit
+    isDraggable: (Int) -> Boolean,
+    onMove: (Int, Int) -> Boolean
 ): DragDropState {
-    return remember(lazyListState, onMove) {
-        DragDropState(lazyListState, onMove)
+    val currentIsDraggable by rememberUpdatedState(isDraggable)
+    val currentOnMove by rememberUpdatedState(onMove)
+    return remember(lazyListState) {
+        DragDropState(
+            lazyListState = lazyListState,
+            isDraggable = { currentIsDraggable(it) },
+            onMove = { from, to -> currentOnMove(from, to) }
+        )
     }
 }
 
