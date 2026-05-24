@@ -361,7 +361,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 targetLang = settings.targetLanguage,
                 customInstructions = settings.customInstructions,
                 disclaimerText = settings.disclaimerText,
-                disclaimerPosition = settings.disclaimerPosition,
                 logSteps = logSteps,
                 title = title,
                 onStepAdded = { step ->
@@ -574,7 +573,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 targetLang = settings.targetLanguage,
                 customInstructions = settings.customInstructions,
                 disclaimerText = settings.disclaimerText,
-                disclaimerPosition = settings.disclaimerPosition,
                 logSteps = logSteps,
                 title = title,
                 onStepAdded = { step ->
@@ -845,7 +843,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 targetLang = settings.targetLanguage,
                 customInstructions = settings.customInstructions,
                 disclaimerText = settings.disclaimerText,
-                disclaimerPosition = settings.disclaimerPosition,
                 logSteps = logSteps,
                 title = job.title,
                 onStepAdded = { step ->

@@ -98,32 +98,21 @@ class GeminiManager {
         targetLang: String,
         customInstructions: String,
         disclaimerText: String,
-        disclaimerPosition: String,
         hasTitle: Boolean
     ): String {
         val hasCustom = customInstructions.isNotBlank()
-        val hasDisclaimer = disclaimerText.isNotBlank() && !disclaimerPosition.equals("none", ignoreCase = true)
-
-        val discMiddleText = if (hasDisclaimer && disclaimerPosition.equals("middle", ignoreCase = true)) {
-            "\n\n# LƯU Ý HỆ THỐNG (DISCLAIMER)\n${disclaimerText.trim()}"
-        } else ""
+        val hasDisclaimer = disclaimerText.isNotBlank()
 
         val customPart = if (hasCustom) {
-            "\n\n# CHỈ DẪN DỊCH THUẬT BỔ SUNG\n${customInstructions.trim()}$discMiddleText"
-        } else if (discMiddleText.isNotEmpty()) {
-            discMiddleText
+            "\n\n# CHỈ DẪN DỊCH THUẬT BỔ SUNG\n${customInstructions.trim()}"
         } else ""
 
         val customPartEn = if (hasCustom) {
-            "\n\n# ADDITIONAL TRANSLATION INSTRUCTIONS\n${customInstructions.trim()}$discMiddleText"
-        } else if (discMiddleText.isNotEmpty()) {
-            discMiddleText
+            "\n\n# ADDITIONAL TRANSLATION INSTRUCTIONS\n${customInstructions.trim()}"
         } else ""
 
         val customPartZh = if (hasCustom) {
-            "\n\n# 附加翻译说明\n${customInstructions.trim()}$discMiddleText"
-        } else if (discMiddleText.isNotEmpty()) {
-            discMiddleText
+            "\n\n# 附加翻译说明\n${customInstructions.trim()}"
         } else ""
 
         val srcTextVi = if (sourceLang.equals("Auto", ignoreCase = true)) "tự động phát hiện" else sourceLang
@@ -215,13 +204,12 @@ class GeminiManager {
             }
         }
 
-        // Apply Top/Bottom Disclaimer if selected
+        // Always put Disclaimer at the top of system instructions if available
         if (hasDisclaimer) {
-            if (disclaimerPosition.equals("top", ignoreCase = true)) {
-                systemInstruction = "# SYSTEM WARNING / DISCLAIMER\n${disclaimerText.trim()}\n\n$systemInstruction"
-            } else if (disclaimerPosition.equals("bottom", ignoreCase = true)) {
-                systemInstruction = "$systemInstruction\n\n# SYSTEM WARNING / DISCLAIMER\n${disclaimerText.trim()}"
-            }
+            val titleText = if (uiLanguage == "vi") "LƯU Ý HỆ THỐNG (DISCLAIMER)"
+            else if (uiLanguage == "zh") "系统提示 (DISCLAIMER)"
+            else "SYSTEM WARNING / DISCLAIMER"
+            systemInstruction = "# $titleText\n${disclaimerText.trim()}\n\n$systemInstruction"
         }
 
         return systemInstruction
@@ -235,7 +223,6 @@ class GeminiManager {
         targetLang: String = "Tiếng Việt",
         customInstructions: String = "",
         disclaimerText: String = "",
-        disclaimerPosition: String = "middle",
         logSteps: MutableList<String>,
         title: String? = null,
         onStepAdded: ((String) -> Unit)? = null,
@@ -274,8 +261,8 @@ class GeminiManager {
         } else {
             addStep("Chỉ dẫn dịch thuật cá nhân hóa: Không có")
         }
-        if (disclaimerText.isNotBlank() && !disclaimerPosition.equals("none", ignoreCase = true)) {
-            addStep("Disclaimer ($disclaimerPosition): \"$disclaimerText\"")
+        if (disclaimerText.isNotBlank()) {
+            addStep("Disclaimer: \"$disclaimerText\"")
         } else {
             addStep("Disclaimer: Không sử dụng")
         }
@@ -286,7 +273,6 @@ class GeminiManager {
             targetLang = targetLang,
             customInstructions = customInstructions,
             disclaimerText = disclaimerText,
-            disclaimerPosition = disclaimerPosition,
             hasTitle = true
         )
 
@@ -296,7 +282,6 @@ class GeminiManager {
             targetLang = targetLang,
             customInstructions = customInstructions,
             disclaimerText = disclaimerText,
-            disclaimerPosition = disclaimerPosition,
             hasTitle = false
         )
 
@@ -401,6 +386,44 @@ class GeminiManager {
                             }
                         }
                     }
+
+                    val sysInstruction = if (chunkIndex == 0 && !title.isNullOrBlank()) systemInstructionWithTitle else systemInstructionStandard
+                    val previewPromptText = if (prompt.length > 300) {
+                        prompt.take(150) + "\n...\n[Đã rút ngắn nội dung dài: ${prompt.length} ký tự]\n...\n" + prompt.takeLast(100)
+                    } else {
+                        prompt
+                    }
+                    val apiPayloadPreview = """
+                    {
+                      "contents": [
+                        {
+                          "parts": [
+                            {
+                              "text": ${escapeJsonString(previewPromptText)}
+                            }
+                          ]
+                        }
+                      ],
+                      "systemInstruction": {
+                        "parts": [
+                          {
+                            "text": ${escapeJsonString(sysInstruction)}
+                          }
+                        ]
+                      },
+                      "generationConfig": {
+                        "temperature": 0.3,
+                        "topP": 0.95
+                      },
+                      "safetySettings": [
+                        { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE" },
+                        { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE" },
+                        { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE" },
+                        { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE" }
+                      ]
+                    }
+                    """.trimIndent()
+                    addStep("[API REQUEST PAYLOAD]:\n$apiPayloadPreview")
 
                     val responseStream = generativeModel.generateContentStream(prompt)
                     val chunkBuilder = StringBuilder()
@@ -701,5 +724,14 @@ class GeminiManager {
         }
         
         return splitIndex
+    }
+
+    private fun escapeJsonString(str: String): String {
+        val escaped = str.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
+        return "\"$escaped\""
     }
 }
