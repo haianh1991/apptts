@@ -1,7 +1,7 @@
 {
-  "versionCode": 14,
-  "versionName": "1.4.0",
+  "versionCode": 15,
+  "versionName": "1.4.1",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.4.0.apk",
-  "releaseNotes": "Tích hợp đầy đủ System Instruction và Prompt tiếng Trung (简体中文) tương ứng khi giao diện hiển thị cài đặt tiếng Trung, đồng bộ hóa trọn vẹn cả 3 ngôn ngữ chính: Việt, Anh, Trung. Cải tiến cơ chế tạo GitHub Release lưu giữ đúng font chữ có dấu Unicode cho cả 3 ngôn ngữ."
+  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.4.1.apk",
+  "releaseNotes": "Thay tiêu đề \"Trình đọc báo Tiếng Việt\" tab Nội Dung bằng Tiêu đề bản dịch + tên thư mục. Thay đổi tính năng kéo thả sắp xếp bằng nút bấm ở menu ba chấm: chuyển xuống cuối, chuyển xuống (1 hàng)."
 }
