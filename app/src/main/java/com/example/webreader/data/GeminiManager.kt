@@ -7,7 +7,6 @@ import com.google.ai.client.generativeai.type.HarmCategory
 import com.google.ai.client.generativeai.type.BlockThreshold
 import com.google.ai.client.generativeai.type.SafetySetting
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.seconds
 
@@ -20,24 +19,86 @@ class GeminiManager {
         SafetySetting(HarmCategory.DANGEROUS_CONTENT, BlockThreshold.NONE)
     )
 
-    private val sensitiveKeywords = listOf(
-        "杀", "死", "血", "尸", "骨", "刀", "枪", "毒", "裸", "暴力", "虐", "斩", "碎", "爆", "强奸", "淫"
-    )
+    private class TranslationNode(
+        val originalText: String,
+        var isLeaf: Boolean = true,
+        var left: TranslationNode? = null,
+        var right: TranslationNode? = null,
+        var translatedText: String = ""
+    ) {
+        fun getTranslation(): String {
+            return if (isLeaf) {
+                if (translatedText.isNotEmpty()) translatedText else originalText
+            } else {
+                val l = left?.getTranslation() ?: ""
+                val r = right?.getTranslation() ?: ""
+                if (l.isNotEmpty() && r.isNotEmpty()) "$l\n\n$r" else l + r
+            }
+        }
+    }
 
-    private fun scanSensitiveSentences(text: String): List<String> {
-        val sentences = text.split(Regex("[。！？\\?\\!\n]"))
-        val suspicious = mutableListOf<String>()
-        for (sentence in sentences) {
-            val trimmed = sentence.trim()
-            if (trimmed.isEmpty()) continue
-            for (keyword in sensitiveKeywords) {
-                if (trimmed.contains(keyword)) {
-                    suspicious.add(trimmed)
-                    break
+    private fun findGoodSplitPointForSafety(text: String): Int {
+        val len = text.length
+        if (len <= 10) return len / 2
+        val mid = len / 2
+        val scanRange = len / 4 // Quét 25% xung quanh trung điểm
+
+        // Ưu tiên 1: Dấu xuống dòng \n
+        var bestIndex = -1
+        var minDiff = Int.MAX_VALUE
+        for (i in (mid - scanRange)..(mid + scanRange)) {
+            if (i in text.indices && text[i] == '\n') {
+                val diff = kotlin.math.abs(i - mid)
+                if (diff < minDiff) {
+                    minDiff = diff
+                    bestIndex = i
                 }
             }
         }
-        return suspicious
+        if (bestIndex != -1) return bestIndex + 1
+
+        // Ưu tiên 2: Dấu kết thúc câu
+        val puncs = setOf('。', '！', '？', '.', '!', '?')
+        for (i in (mid - scanRange)..(mid + scanRange)) {
+            if (i in text.indices && text[i] in puncs) {
+                val diff = kotlin.math.abs(i - mid)
+                if (diff < minDiff) {
+                    minDiff = diff
+                    bestIndex = i
+                }
+            }
+        }
+        if (bestIndex != -1) return bestIndex + 1
+
+        // Ưu tiên 3: Dấu phẩy hoặc dấu ngắt khác
+        val commas = setOf('，', ',', ';', '；')
+        for (i in (mid - scanRange)..(mid + scanRange)) {
+            if (i in text.indices && text[i] in commas) {
+                val diff = kotlin.math.abs(i - mid)
+                if (diff < minDiff) {
+                    minDiff = diff
+                    bestIndex = i
+                }
+            }
+        }
+        if (bestIndex != -1) return bestIndex + 1
+
+        // Ưu tiên 4: Trung điểm
+        return mid
+    }
+
+    private fun isSafetyError(e: Throwable): Boolean {
+        val errText = getDetailedErrorMessage(e).lowercase()
+        val keywords = listOf(
+            "safety",
+            "blocked",
+            "prohibited",
+            "finishreason",
+            "serializationexception",
+            "missingfieldexception",
+            "provided content"
+        )
+        return keywords.any { errText.contains(it) }
     }
 
     suspend fun translateTitle(
@@ -215,6 +276,295 @@ class GeminiManager {
         return systemInstruction
     }
 
+    private suspend fun translateChunkRecursive(
+        chunk: String,
+        apiKeys: List<String>,
+        currentKeyIndexRef: IntArray,
+        modelName: String,
+        sourceLang: String,
+        targetLang: String,
+        customInstructions: String,
+        disclaimerText: String,
+        logSteps: MutableList<String>,
+        onStepAdded: ((String) -> Unit)?,
+        onContentUpdated: (() -> Unit)?,
+        node: TranslationNode,
+        uiLanguage: String,
+        isFirstChunk: Boolean,
+        title: String?,
+        systemInstructionWithTitle: String,
+        systemInstructionStandard: String,
+        chunkInfo: String,
+        depth: Int = 0
+    ): Boolean = withContext(Dispatchers.IO) {
+        fun addStep(step: String) {
+            logSteps.add(step)
+            onStepAdded?.invoke(step)
+        }
+
+        var success = false
+        val keysCount = apiKeys.size
+        val chunkErrors = mutableListOf<String>()
+
+        for (attempt in 0 until keysCount) {
+            val keyIdx = (currentKeyIndexRef[0] + attempt) % keysCount
+            val apiKey = apiKeys[keyIdx]
+            val keySnippet = if (apiKey.length > 8) {
+                apiKey.take(4) + "..." + apiKey.takeLast(4)
+            } else {
+                "Key ${keyIdx + 1}"
+            }
+
+            val stepMsg = if (depth > 0) {
+                "Đang thử phần con $chunkInfo (Kích thước: ${chunk.length} ký tự) với API Key số ${keyIdx + 1} ($keySnippet)..."
+            } else {
+                "Đang thử dịch $chunkInfo (Kích thước: ${chunk.length} ký tự) với API Key số ${keyIdx + 1} ($keySnippet)..."
+            }
+            addStep(stepMsg)
+
+            try {
+                val generativeModel = GenerativeModel(
+                    modelName = modelName,
+                    apiKey = apiKey,
+                    requestOptions = RequestOptions(timeout = 180.seconds),
+                    safetySettings = safetySettings,
+                    systemInstruction = content {
+                        text(if (isFirstChunk && !title.isNullOrBlank()) systemInstructionWithTitle else systemInstructionStandard)
+                    }
+                )
+
+                val prompt = if (isFirstChunk && !title.isNullOrBlank()) {
+                    when (uiLanguage) {
+                        "vi" -> {
+                            """
+                                Tiêu đề gốc cần dịch:
+                                $title
+                                
+                                Dưới đây là văn bản trang web cần dịch sang ngôn ngữ đích ($targetLang):
+                                
+                                $chunk
+                            """.trimIndent()
+                        }
+                        "zh" -> {
+                            """
+                                要翻译的原始标题：
+                                $title
+                                
+                                以下是要翻译为 $targetLang 的网页原始文本：
+                                
+                                $chunk
+                            """.trimIndent()
+                        }
+                        else -> {
+                            """
+                                Original title to translate:
+                                $title
+                                
+                                Here is the raw webpage text to translate into $targetLang:
+                                
+                                $chunk
+                            """.trimIndent()
+                        }
+                    }
+                } else {
+                    when (uiLanguage) {
+                        "vi" -> {
+                            val srcLangText = if (sourceLang.equals("Auto", ignoreCase = true)) "tự động phát hiện" else sourceLang
+                            """
+                                Hãy dịch văn bản thô dưới đây từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang). Hãy lọc bỏ các thành phần quảng cáo hoặc nút điều hướng nếu có, dịch sát nghĩa và tự nhiên nhất:
+                                
+                                $chunk
+                            """.trimIndent()
+                        }
+                        "zh" -> {
+                            val srcLangTextZh = if (sourceLang.equals("Auto", ignoreCase = true)) "自动检测" else sourceLang
+                            """
+                                请将以下原始文本从源语言 ($srcLangTextZh) 翻译为目标语言 ($targetLang)。如果存在 any 广告 or 导航链接，请进行过滤，并自然且专业地翻译核心内容：
+                                
+                                $chunk
+                            """.trimIndent()
+                        }
+                        else -> {
+                            val srcLangTextEn = if (sourceLang.equals("Auto", ignoreCase = true)) "automatically detected" else sourceLang
+                            """
+                                Please translate the following raw text from the source language ($srcLangTextEn) into the target language ($targetLang). Filter out any advertisements or navigation links if present, and translate the core content naturally and professionally:
+                                
+                                $chunk
+                            """.trimIndent()
+                        }
+                    }
+                }
+
+                val sysInstruction = if (isFirstChunk && !title.isNullOrBlank()) systemInstructionWithTitle else systemInstructionStandard
+                val previewPromptText = if (prompt.length > 300) {
+                    prompt.take(150) + "\n...\n[Đã rút ngắn nội dung dài: ${prompt.length} ký tự]\n...\n" + prompt.takeLast(100)
+                } else {
+                    prompt
+                }
+                
+                val apiPayloadPreview = """
+                {
+                  "contents": [
+                    {
+                      "parts": [
+                        {
+                          "text": ${escapeJsonString(previewPromptText)}
+                        }
+                      ]
+                    }
+                  ],
+                  "systemInstruction": {
+                    "parts": [
+                      {
+                        "text": ${escapeJsonString(sysInstruction)}
+                      }
+                    ]
+                  },
+                  "generationConfig": {
+                    "temperature": 0.3,
+                    "topP": 0.95
+                  },
+                  "safetySettings": [
+                    { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE" },
+                    { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE" },
+                    { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE" },
+                    { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE" }
+                  ]
+                }
+                """.trimIndent()
+                addStep("[API REQUEST PAYLOAD]:\n$apiPayloadPreview")
+
+                val responseStream = generativeModel.generateContentStream(prompt)
+                val chunkBuilder = StringBuilder()
+                var hasSafetyFinishReason = false
+                
+                responseStream.collect { response ->
+                    val candidate = response.candidates.firstOrNull()
+                    if (candidate?.finishReason?.name == "SAFETY" || candidate?.finishReason?.name == "PROHIBITED_CONTENT") {
+                        hasSafetyFinishReason = true
+                        throw Exception("Gemini API chặn nội dung do an toàn (finishReason: ${candidate.finishReason?.name})")
+                    }
+                    val chunkText = response.text
+                    if (chunkText != null) {
+                        chunkBuilder.append(chunkText)
+                        node.translatedText = chunkBuilder.toString()
+                        onContentUpdated?.invoke()
+                    }
+                }
+
+                if (hasSafetyFinishReason) {
+                    throw Exception("Gemini API chặn nội dung do an toàn (SAFETY finishReason)")
+                }
+
+                val translatedText = chunkBuilder.toString()
+                if (translatedText.isNotEmpty()) {
+                    node.translatedText = translatedText
+                    success = true
+                    currentKeyIndexRef[0] = keyIdx
+                    val successMsg = if (depth > 0) {
+                        "Dịch thành công phần con $chunkInfo với API Key số ${keyIdx + 1} ($keySnippet)."
+                    } else {
+                        "Dịch thành công $chunkInfo với API Key số ${keyIdx + 1} ($keySnippet)."
+                    }
+                    addStep(successMsg)
+                    break
+                } else {
+                    throw Exception("Gemini API không trả về nội dung dịch.")
+                }
+            } catch (e: Exception) {
+                val detailedErr = getDetailedErrorMessage(e)
+                val isSafety = isSafetyError(e)
+                val errLabel = if (isSafety) "Lỗi An toàn (Safety Blocked)" else "Lỗi kỹ thuật"
+                
+                addStep("Thất bại $chunkInfo với API Key số ${keyIdx + 1} ($keySnippet) [$errLabel]. Chi tiết: $detailedErr")
+                chunkErrors.add("[$keySnippet] [$errLabel]: $detailedErr")
+
+                if (isSafety && chunk.length > 250) {
+                    addStep("Kích hoạt cơ chế tự động chia nhỏ đoạn văn $chunkInfo (kích thước: ${chunk.length} ký tự > 250 ký tự) làm hai để gửi lại.")
+                    
+                    val splitIdx = findGoodSplitPointForSafety(chunk)
+                    val leftText = chunk.substring(0, splitIdx)
+                    val rightText = chunk.substring(splitIdx)
+                    
+                    node.isLeaf = false
+                    val leftNode = TranslationNode(leftText)
+                    val rightNode = TranslationNode(rightText)
+                    node.left = leftNode
+                    node.right = rightNode
+                    
+                    val leftSuccess = translateChunkRecursive(
+                        chunk = leftText,
+                        apiKeys = apiKeys,
+                        currentKeyIndexRef = currentKeyIndexRef,
+                        modelName = modelName,
+                        sourceLang = sourceLang,
+                        targetLang = targetLang,
+                        customInstructions = customInstructions,
+                        disclaimerText = disclaimerText,
+                        logSteps = logSteps,
+                        onStepAdded = onStepAdded,
+                        onContentUpdated = onContentUpdated,
+                        node = leftNode,
+                        uiLanguage = uiLanguage,
+                        isFirstChunk = isFirstChunk,
+                        title = title,
+                        systemInstructionWithTitle = systemInstructionWithTitle,
+                        systemInstructionStandard = systemInstructionStandard,
+                        chunkInfo = "$chunkInfo.1",
+                        depth = depth + 1
+                    )
+                    
+                    val rightSuccess = translateChunkRecursive(
+                        chunk = rightText,
+                        apiKeys = apiKeys,
+                        currentKeyIndexRef = currentKeyIndexRef,
+                        modelName = modelName,
+                        sourceLang = sourceLang,
+                        targetLang = targetLang,
+                        customInstructions = customInstructions,
+                        disclaimerText = disclaimerText,
+                        logSteps = logSteps,
+                        onStepAdded = onStepAdded,
+                        onContentUpdated = onContentUpdated,
+                        node = rightNode,
+                        uiLanguage = uiLanguage,
+                        isFirstChunk = false,
+                        title = null,
+                        systemInstructionWithTitle = systemInstructionWithTitle,
+                        systemInstructionStandard = systemInstructionStandard,
+                        chunkInfo = "$chunkInfo.2",
+                        depth = depth + 1
+                    )
+                    
+                    success = leftSuccess && rightSuccess
+                    return@withContext success
+                }
+            }
+        }
+
+        if (!success) {
+            val hasSafetyErr = chunkErrors.any { it.contains("Lỗi An toàn") }
+            val fallbackHeader = if (hasSafetyErr) {
+                when (uiLanguage) {
+                    "vi" -> "--- [Đoạn này bị bộ lọc Gemini API chặn dịch thuật do chính sách nội dung, hiển thị văn bản gốc] ---"
+                    "zh" -> "--- [该段落被 Gemini API 安全过滤器拦截，显示原文] ---"
+                    else -> "--- [This section was blocked by Gemini API safety filter, showing original text] ---"
+                }
+            } else {
+                when (uiLanguage) {
+                    "vi" -> "--- [Lỗi dịch thuật kỹ thuật, hiển thị văn bản gốc] ---"
+                    "zh" -> "--- [翻译失败，显示原文] ---"
+                    else -> "--- [Translation error, showing original text] ---"
+                }
+            }
+            node.translatedText = "$fallbackHeader\n\n$chunk"
+            onContentUpdated?.invoke()
+            addStep("Kết quả $chunkInfo: Thất bại sau khi thử tất cả API Keys. Sử dụng văn bản gốc làm fallback.")
+        }
+
+        return@withContext success
+    }
+
     suspend fun translateContent(
         text: String,
         apiKeys: List<String>,
@@ -285,231 +635,39 @@ class GeminiManager {
             hasTitle = false
         )
 
-        val translatedChunks = mutableListOf<String>()
-        var currentKeyIndex = 0
+        val currentKeyIndexRef = intArrayOf(0)
+        val chunkNodes = chunks.map { TranslationNode(it) }
 
-        for ((chunkIndex, chunk) in chunks.withIndex()) {
-            val chunkWords = countWords(chunk)
-            if (chunks.size > 1) {
-                addStep("Đang dịch phần ${chunkIndex + 1}/${chunks.size} (Kích thước: ${chunk.length} ký tự, khoảng $chunkWords từ)...")
-            }
-
-            var chunkSuccess = false
-            var chunkResult = ""
-            val chunkErrors = mutableListOf<String>()
-            val keysCount = apiKeys.size
-
-            for (attempt in 0 until keysCount) {
-                val keyIdx = (currentKeyIndex + attempt) % keysCount
-                val apiKey = apiKeys[keyIdx]
-                val keySnippet = if (apiKey.length > 8) {
-                    apiKey.take(4) + "..." + apiKey.takeLast(4)
-                } else {
-                    "Key ${keyIdx + 1}"
-                }
-
-                if (chunks.size > 1) {
-                    addStep("Đang thử phần ${chunkIndex + 1}/${chunks.size} với API Key số ${keyIdx + 1} ($keySnippet)...")
-                } else {
-                    addStep("Đang thử dịch với API Key số ${keyIdx + 1} ($keySnippet)...")
-                }
-
-                try {
-                    val generativeModel = GenerativeModel(
-                        modelName = modelName,
-                        apiKey = apiKey,
-                        requestOptions = RequestOptions(timeout = 180.seconds),
-                        safetySettings = safetySettings,
-                        systemInstruction = content {
-                            text(if (chunkIndex == 0 && !title.isNullOrBlank()) systemInstructionWithTitle else systemInstructionStandard)
-                        }
-                    )
-
-                    val prompt = if (chunkIndex == 0 && !title.isNullOrBlank()) {
-                        when (uiLanguage) {
-                            "vi" -> {
-                                """
-                                    Tiêu đề gốc cần dịch:
-                                    $title
-                                    
-                                    Dưới đây là văn bản trang web cần dịch sang ngôn ngữ đích ($targetLang):
-                                    
-                                    $chunk
-                                """.trimIndent()
-                            }
-                            "zh" -> {
-                                """
-                                    要翻译的原始标题：
-                                    $title
-                                    
-                                    以下是要翻译为 $targetLang 的网页原始文本：
-                                    
-                                    $chunk
-                                """.trimIndent()
-                            }
-                            else -> {
-                                """
-                                    Original title to translate:
-                                    $title
-                                    
-                                    Here is the raw webpage text to translate into $targetLang:
-                                    
-                                    $chunk
-                                """.trimIndent()
-                            }
-                        }
-                    } else {
-                        when (uiLanguage) {
-                            "vi" -> {
-                                val srcLangText = if (sourceLang.equals("Auto", ignoreCase = true)) "tự động phát hiện" else sourceLang
-                                """
-                                    Hãy dịch văn bản thô dưới đây từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang). Hãy lọc bỏ các thành phần quảng cáo hoặc nút điều hướng nếu có, dịch sát nghĩa và tự nhiên nhất:
-                                    
-                                    $chunk
-                                """.trimIndent()
-                            }
-                            "zh" -> {
-                                val srcLangTextZh = if (sourceLang.equals("Auto", ignoreCase = true)) "自动检测" else sourceLang
-                                """
-                                    请将以下原始文本从源语言 ($srcLangTextZh) 翻译为目标语言 ($targetLang)。如果存在任何广告或导航链接，请进行过滤，并自然且专业地翻译核心内容：
-                                    
-                                    $chunk
-                                """.trimIndent()
-                            }
-                            else -> {
-                                val srcLangTextEn = if (sourceLang.equals("Auto", ignoreCase = true)) "automatically detected" else sourceLang
-                                """
-                                    Please translate the following raw text from the source language ($srcLangTextEn) into the target language ($targetLang). Filter out any advertisements or navigation links if present, and translate the core content naturally and professionally:
-                                    
-                                    $chunk
-                                """.trimIndent()
-                            }
-                        }
-                    }
-
-                    val sysInstruction = if (chunkIndex == 0 && !title.isNullOrBlank()) systemInstructionWithTitle else systemInstructionStandard
-                    val previewPromptText = if (prompt.length > 300) {
-                        prompt.take(150) + "\n...\n[Đã rút ngắn nội dung dài: ${prompt.length} ký tự]\n...\n" + prompt.takeLast(100)
-                    } else {
-                        prompt
-                    }
-                    val apiPayloadPreview = """
-                    {
-                      "contents": [
-                        {
-                          "parts": [
-                            {
-                              "text": ${escapeJsonString(previewPromptText)}
-                            }
-                          ]
-                        }
-                      ],
-                      "systemInstruction": {
-                        "parts": [
-                          {
-                            "text": ${escapeJsonString(sysInstruction)}
-                          }
-                        ]
-                      },
-                      "generationConfig": {
-                        "temperature": 0.3,
-                        "topP": 0.95
-                      },
-                      "safetySettings": [
-                        { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE" },
-                        { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE" },
-                        { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE" },
-                        { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE" }
-                      ]
-                    }
-                    """.trimIndent()
-                    addStep("[API REQUEST PAYLOAD]:\n$apiPayloadPreview")
-
-                    val responseStream = generativeModel.generateContentStream(prompt)
-                    val chunkBuilder = StringBuilder()
-                    responseStream.collect { response ->
-                        val chunkText = response.text
-                        if (chunkText != null) {
-                            chunkBuilder.append(chunkText)
-                            val currentTotalText = (translatedChunks + chunkBuilder.toString()).joinToString("\n\n")
-                            onContentUpdated?.invoke(currentTotalText)
-                        }
-                    }
-                    val translatedText = chunkBuilder.toString()
-                    if (translatedText.isNotEmpty()) {
-                        chunkResult = translatedText
-                        chunkSuccess = true
-                        currentKeyIndex = keyIdx
-                        if (chunks.size > 1) {
-                            addStep("Dịch thành công phần ${chunkIndex + 1}/${chunks.size} với API Key số ${keyIdx + 1} ($keySnippet).")
-                        } else {
-                            addStep("Dịch thành công với API Key số ${keyIdx + 1} ($keySnippet).")
-                        }
-                        break
-                    } else {
-                        throw Exception("Gemini API không trả về nội dung dịch.")
-                    }
-                } catch (e: Exception) {
-                    val detailedErr = getDetailedErrorMessage(e)
-                    if (chunks.size > 1) {
-                        addStep("Thất bại phần ${chunkIndex + 1}/${chunks.size} với API Key số ${keyIdx + 1} ($keySnippet). Chi tiết lỗi: $detailedErr")
-                    } else {
-                        addStep("Thất bại với API Key số ${keyIdx + 1} ($keySnippet). Chi tiết lỗi: $detailedErr")
-                    }
-                    chunkErrors.add("[$keySnippet]: $detailedErr")
-                }
-            }
-
-            if (chunkSuccess) {
-                translatedChunks.add(chunkResult)
-            } else {
-                val isBlocked = chunkErrors.any {
-                    it.contains("blocked", ignoreCase = true) ||
-                    it.contains("safety", ignoreCase = true) ||
-                    it.contains("SerializationException", ignoreCase = true) ||
-                    it.contains("MissingFieldException", ignoreCase = true) ||
-                    it.contains("parts", ignoreCase = true) ||
-                    it.contains("deserialize", ignoreCase = true)
-                }
-                val headerMsg = if (isBlocked) {
-                    "--- [Đoạn này bị bộ lọc Gemini API chặn dịch thuật, hiển thị văn bản gốc] ---"
-                } else {
-                    "--- [Lỗi dịch thuật, hiển thị văn bản gốc] ---"
-                }
-                
-                if (isBlocked) {
-                    // Quét các câu tiếng Trung nghi ngờ gây lỗi blocked offline cục bộ
-                    val suspicious = scanSensitiveSentences(chunk)
-                    if (suspicious.isNotEmpty()) {
-                        addStep("Chẩn đoán: Phát hiện ${suspicious.size} câu tiếng Trung nghi ngờ chứa từ khóa nhạy cảm gây lỗi blocked:")
-                        suspicious.take(5).forEach { 
-                            addStep("  -> Nghi ngờ: \"$it\"")
-                        }
-                        if (suspicious.size > 5) {
-                            addStep("  -> ... và ${suspicious.size - 5} câu khác.")
-                        }
-                    } else {
-                        addStep("Chẩn đoán: Không phát hiện câu nào chứa từ khóa nhạy cảm thông thường trong danh sách quét cục bộ.")
-                    }
-                }
-                
-                val fallbackText = "$headerMsg\n\n$chunk"
-                translatedChunks.add(fallbackText)
-                
-                val finalErrMsg = if (chunks.size > 1) {
-                    "Không thể dịch phần ${chunkIndex + 1}/${chunks.size}. Hệ thống sử dụng văn bản gốc để tiếp tục tiến trình."
-                } else {
-                    "Không thể dịch văn bản. Hệ thống sử dụng văn bản gốc để tiếp tục tiến trình."
-                }
-                addStep("Kết quả: $finalErrMsg")
-                
-                // Cập nhật giao diện đọc tức thì để người dùng không bị treo màn hình dịch
-                val currentTotalText = translatedChunks.joinToString("\n\n")
-                onContentUpdated?.invoke(currentTotalText)
-            }
+        fun triggerGlobalUpdate() {
+            val totalText = chunkNodes.joinToString("\n\n") { it.getTranslation() }
+            onContentUpdated?.invoke(totalText)
         }
 
-        val finalResultText = translatedChunks.joinToString("\n\n")
+        for ((chunkIndex, chunk) in chunks.withIndex()) {
+            val chunkInfo = if (chunks.size > 1) "phần ${chunkIndex + 1}/${chunks.size}" else "toàn bộ văn bản"
+            translateChunkRecursive(
+                chunk = chunk,
+                apiKeys = apiKeys,
+                currentKeyIndexRef = currentKeyIndexRef,
+                modelName = modelName,
+                sourceLang = sourceLang,
+                targetLang = targetLang,
+                customInstructions = customInstructions,
+                disclaimerText = disclaimerText,
+                logSteps = logSteps,
+                onStepAdded = onStepAdded,
+                onContentUpdated = ::triggerGlobalUpdate,
+                node = chunkNodes[chunkIndex],
+                uiLanguage = uiLanguage,
+                isFirstChunk = (chunkIndex == 0),
+                title = title,
+                systemInstructionWithTitle = systemInstructionWithTitle,
+                systemInstructionStandard = systemInstructionStandard,
+                chunkInfo = chunkInfo
+            )
+        }
+
+        val finalResultText = chunkNodes.joinToString("\n\n") { it.getTranslation() }
         Result.success(finalResultText)
     }
 
