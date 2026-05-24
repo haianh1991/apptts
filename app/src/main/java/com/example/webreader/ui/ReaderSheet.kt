@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedTextField
@@ -166,10 +167,24 @@ fun ReaderSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
+                    val displayTitle = remember(activeTab, currentItem, folders, appStrings.readerTitle) {
+                        if (activeTab == 0 && currentItem != null) {
+                            val folderName = folders.firstOrNull { it.id == currentItem.folderId }?.name
+                            if (folderName != null) {
+                                "${currentItem.title} ($folderName)"
+                            } else {
+                                currentItem.title
+                            }
+                        } else {
+                            appStrings.readerTitle
+                        }
+                    }
                     Text(
-                        text = appStrings.readerTitle,
+                        text = displayTitle,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                     Text(
                         text = if (paragraphs.isNotEmpty()) String.format(appStrings.readerPanelTitlePlaying, currentIndex + 1, paragraphs.size) else appStrings.readerPanelTitleOffline,
@@ -882,9 +897,9 @@ fun ReaderSheet(
                                                     },
                                                     onRemove = { viewModel.removeQueueItemById(qItem.id) },
                                                     onMoveClick = { itemToMove = qItem },
-                                                    modifier = Modifier
-                                                        .padding(start = 16.dp)
-                                                        .dragItem(index, dragDropState, enabled = true)
+                                                    onMoveDown = { viewModel.moveQueueItemDown(qItem.id) },
+                                                    onMoveToBottom = { viewModel.moveQueueItemToBottom(qItem.id) },
+                                                    modifier = Modifier.padding(start = 16.dp)
                                                 )
                                             }
                                             is QueueListItem.RootItemsHeader -> {
@@ -913,7 +928,8 @@ fun ReaderSheet(
                                                     },
                                                     onRemove = { viewModel.removeQueueItemById(qItem.id) },
                                                     onMoveClick = { itemToMove = qItem },
-                                                    modifier = Modifier.dragItem(index, dragDropState, enabled = true)
+                                                    onMoveDown = { viewModel.moveQueueItemDown(qItem.id) },
+                                                    onMoveToBottom = { viewModel.moveQueueItemToBottom(qItem.id) }
                                                 )
                                             }
                                             is QueueListItem.FinishedHeader -> {
@@ -942,7 +958,8 @@ fun ReaderSheet(
                                                     },
                                                     onRemove = { viewModel.removeQueueItemById(qItem.id) },
                                                     onMoveClick = { itemToMove = qItem },
-                                                    modifier = Modifier.dragItem(index, dragDropState, enabled = true)
+                                                    onMoveDown = { viewModel.moveQueueItemDown(qItem.id) },
+                                                    onMoveToBottom = { viewModel.moveQueueItemToBottom(qItem.id) }
                                                 )
                                             }
                                         }
@@ -1706,6 +1723,8 @@ fun QueueItemCard(
     onPlayPause: () -> Unit,
     onRemove: () -> Unit,
     onMoveClick: () -> Unit,
+    onMoveDown: () -> Unit,
+    onMoveToBottom: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val appStrings = LocalAppStrings.current
@@ -1786,6 +1805,26 @@ fun QueueItemCard(
                         },
                         leadingIcon = {
                             Icon(Icons.Filled.Folder, contentDescription = null)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(appStrings.queueItemMoveDown) },
+                        onClick = {
+                            showItemMenu = false
+                            onMoveDown()
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Filled.ArrowDownward, contentDescription = null)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(appStrings.queueItemMoveToBottom) },
+                        onClick = {
+                            showItemMenu = false
+                            onMoveToBottom()
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Filled.FastForward, contentDescription = null)
                         }
                     )
                     DropdownMenuItem(

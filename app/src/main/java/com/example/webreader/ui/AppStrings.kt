@@ -162,6 +162,8 @@ interface AppStrings {
     val folderRenameMenu: String
     val folderDeleteMenu: String
     val queueItemMoveMenu: String
+    val queueItemMoveDown: String
+    val queueItemMoveToBottom: String
     val paragraphCountTemplate: String
     val readerTranslatingMore: String
     val readerTitle: String
@@ -327,6 +329,8 @@ class ViAppStrings : AppStrings {
     override val folderRenameMenu = "Đổi tên"
     override val folderDeleteMenu = "Xóa thư mục"
     override val queueItemMoveMenu = "Di chuyển vào thư mục"
+    override val queueItemMoveDown = "Chuyển xuống (1 hàng)"
+    override val queueItemMoveToBottom = "Chuyển xuống cuối"
     override val paragraphCountTemplate = "%d đoạn văn"
     override val readerTranslatingMore = "Đang dịch tiếp..."
     override val readerTitle = "Trình Đọc Báo Tiếng Việt"
@@ -492,6 +496,8 @@ class EnAppStrings : AppStrings {
     override val folderRenameMenu = "Rename"
     override val folderDeleteMenu = "Delete Folder"
     override val queueItemMoveMenu = "Move to folder"
+    override val queueItemMoveDown = "Move Down (1 row)"
+    override val queueItemMoveToBottom = "Move to Bottom"
     override val paragraphCountTemplate = "%d paragraphs"
     override val readerTranslatingMore = "Translating next..."
     override val readerTitle = "Article Reader"
@@ -657,6 +663,8 @@ class ZhAppStrings : AppStrings {
     override val folderRenameMenu = "重命名"
     override val folderDeleteMenu = "删除文件夹"
     override val queueItemMoveMenu = "移动到文件夹"
+    override val queueItemMoveDown = "下移一格"
+    override val queueItemMoveToBottom = "移至底部"
     override val paragraphCountTemplate = "%d 段"
     override val readerTranslatingMore = "正在翻译下一段..."
     override val readerTitle = "网页阅读器"

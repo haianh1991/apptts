@@ -1028,6 +1028,54 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun moveQueueItemDown(itemId: String) {
+        val currentList = _queue.value.toMutableList()
+        val itemIndex = currentList.indexOfFirst { it.id == itemId }
+        if (itemIndex == -1) return
+        
+        val item = currentList[itemIndex]
+        val folderId = item.folderId
+        
+        val groupItems = currentList.filter { it.folderId == folderId }.toMutableList()
+        val sortedGroup = if (folderId != null) {
+            groupItems.sortedBy { it.createdAt }
+        } else {
+            val foldersList = _folders.value
+            val folderIds = foldersList.map { it.id }.toSet()
+            groupItems.filter { it.folderId == null || !folderIds.contains(it.folderId) }.sortedByDescending { it.createdAt }
+        }
+        
+        val idxInGroup = sortedGroup.indexOfFirst { it.id == itemId }
+        if (idxInGroup == -1 || idxInGroup >= sortedGroup.size - 1) return
+        
+        val nextItem = sortedGroup[idxInGroup + 1]
+        reorderQueueItems(itemId, nextItem.id)
+    }
+
+    fun moveQueueItemToBottom(itemId: String) {
+        val currentList = _queue.value.toMutableList()
+        val itemIndex = currentList.indexOfFirst { it.id == itemId }
+        if (itemIndex == -1) return
+        
+        val item = currentList[itemIndex]
+        val folderId = item.folderId
+        
+        val groupItems = currentList.filter { it.folderId == folderId }.toMutableList()
+        val sortedGroup = if (folderId != null) {
+            groupItems.sortedBy { it.createdAt }
+        } else {
+            val foldersList = _folders.value
+            val folderIds = foldersList.map { it.id }.toSet()
+            groupItems.filter { it.folderId == null || !folderIds.contains(it.folderId) }.sortedByDescending { it.createdAt }
+        }
+        
+        val idxInGroup = sortedGroup.indexOfFirst { it.id == itemId }
+        if (idxInGroup == -1 || idxInGroup >= sortedGroup.size - 1) return
+        
+        val lastItem = sortedGroup.last()
+        reorderQueueItems(itemId, lastItem.id)
+    }
+
     fun createFolder(name: String): String {
         val folderId = java.util.UUID.randomUUID().toString()
         val newFolder = QueueFolder(
