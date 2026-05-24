@@ -172,6 +172,15 @@ interface AppStrings {
     val contentDescriptionCollapse: String
     val contentDescriptionExpand: String
     val contentDescriptionClose: String
+
+    val readingLabel: String
+    val settingsDisclaimerTitle: String
+    val settingsDisclaimerPosition: String
+    val settingsDisclaimerText: String
+    val disclaimerPosNone: String
+    val disclaimerPosTop: String
+    val disclaimerPosMiddle: String
+    val disclaimerPosBottom: String
 }
 
 class ViAppStrings : AppStrings {
@@ -339,6 +348,15 @@ class ViAppStrings : AppStrings {
     override val contentDescriptionCollapse = "Thu gọn"
     override val contentDescriptionExpand = "Mở rộng"
     override val contentDescriptionClose = "Đóng"
+
+    override val readingLabel = " (đang đọc)"
+    override val settingsDisclaimerTitle = "Cấu hình Disclaimer (Miễn trừ)"
+    override val settingsDisclaimerPosition = "Vị trí Disclaimer trong Prompt"
+    override val settingsDisclaimerText = "Nội dung Disclaimer"
+    override val disclaimerPosNone = "Không có"
+    override val disclaimerPosTop = "Đầu prompt"
+    override val disclaimerPosMiddle = "Giữa prompt"
+    override val disclaimerPosBottom = "Cuối prompt"
 }
 
 class EnAppStrings : AppStrings {
@@ -506,6 +524,15 @@ class EnAppStrings : AppStrings {
     override val contentDescriptionCollapse = "Collapse"
     override val contentDescriptionExpand = "Expand"
     override val contentDescriptionClose = "Close"
+
+    override val readingLabel = " (reading)"
+    override val settingsDisclaimerTitle = "Disclaimer Configuration"
+    override val settingsDisclaimerPosition = "Disclaimer Position in Prompt"
+    override val settingsDisclaimerText = "Disclaimer Content"
+    override val disclaimerPosNone = "None"
+    override val disclaimerPosTop = "Top"
+    override val disclaimerPosMiddle = "Middle"
+    override val disclaimerPosBottom = "Bottom"
 }
 
 class ZhAppStrings : AppStrings {
@@ -673,6 +700,15 @@ class ZhAppStrings : AppStrings {
     override val contentDescriptionCollapse = "收起"
     override val contentDescriptionExpand = "展开"
     override val contentDescriptionClose = "关闭"
+
+    override val readingLabel = " (正在阅读)"
+    override val settingsDisclaimerTitle = "免责声明配置"
+    override val settingsDisclaimerPosition = "免责声明在 Prompt 中的位置"
+    override val settingsDisclaimerText = "免责声明内容"
+    override val disclaimerPosNone = "无"
+    override val disclaimerPosTop = "Prompt 顶部"
+    override val disclaimerPosMiddle = "Prompt 中部"
+    override val disclaimerPosBottom = "Prompt 底部"
 }
 
 val LocalAppStrings = staticCompositionLocalOf<AppStrings> {

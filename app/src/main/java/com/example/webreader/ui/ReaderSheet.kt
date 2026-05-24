@@ -105,6 +105,7 @@ fun ReaderSheet(
     val queue by viewModel.queue.collectAsState()
     val bookmarks by viewModel.bookmarks.collectAsState()
     val currentQueueItemIndex by viewModel.currentQueueItemIndex.collectAsState()
+    val lastReadQueueItemId by viewModel.lastReadQueueItemId.collectAsState()
     var activeTab by remember { mutableIntStateOf(0) }
 
     val folders by viewModel.folders.collectAsState()
@@ -887,6 +888,7 @@ fun ReaderSheet(
                                                     item = qItem,
                                                     isCurrent = isCurrent,
                                                     isPlaying = isPlaying,
+                                                    isReading = qItem.id == lastReadQueueItemId,
                                                     onPlayPause = {
                                                         if (isCurrent && isPlaying) {
                                                             viewModel.pauseReading()
@@ -918,6 +920,7 @@ fun ReaderSheet(
                                                     item = qItem,
                                                     isCurrent = isCurrent,
                                                     isPlaying = isPlaying,
+                                                    isReading = qItem.id == lastReadQueueItemId,
                                                     onPlayPause = {
                                                         if (isCurrent && isPlaying) {
                                                             viewModel.pauseReading()
@@ -948,6 +951,7 @@ fun ReaderSheet(
                                                     item = qItem,
                                                     isCurrent = isCurrent,
                                                     isPlaying = isPlaying,
+                                                    isReading = qItem.id == lastReadQueueItemId,
                                                     onPlayPause = {
                                                         if (isCurrent && isPlaying) {
                                                             viewModel.pauseReading()
@@ -1720,6 +1724,7 @@ fun QueueItemCard(
     item: QueueItem,
     isCurrent: Boolean,
     isPlaying: Boolean,
+    isReading: Boolean,
     onPlayPause: () -> Unit,
     onRemove: () -> Unit,
     onMoveClick: () -> Unit,
@@ -1766,7 +1771,7 @@ fun QueueItemCard(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = appStrings.paragraphCountTemplate.format(item.paragraphs.size),
+                    text = appStrings.paragraphCountTemplate.format(item.paragraphs.size) + if (isReading) appStrings.readingLabel else "",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
                 )

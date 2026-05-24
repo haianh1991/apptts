@@ -68,6 +68,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private val _currentQueueItemIndex = MutableStateFlow<Int>(-1)
     val currentQueueItemIndex: StateFlow<Int> = _currentQueueItemIndex
 
+    private val _lastReadQueueItemId = MutableStateFlow(settings.lastReadQueueItemId)
+    val lastReadQueueItemId: StateFlow<String> = _lastReadQueueItemId
+
+    private fun updateLastReadQueueItemId(itemId: String) {
+        settings.lastReadQueueItemId = itemId
+        _lastReadQueueItemId.value = itemId
+    }
+
     private val _url = MutableStateFlow("https://news.google.com")
     val url: StateFlow<String> = _url
 
@@ -133,9 +141,23 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         activeInstance = this
         val queueData = queueRepository.getQueueData()
         _folders.value = queueData.folders
-        _queue.value = sortQueueItems(queueData.items, queueData.folders)
+        val sortedItems = sortQueueItems(queueData.items, queueData.folders)
+        _queue.value = sortedItems
         _bookmarks.value = bookmarkRepository.getBookmarks()
         updateBookmarkStatus()
+        
+        // Restore last read item state if exists
+        val lastId = settings.lastReadQueueItemId
+        if (lastId.isNotEmpty()) {
+            val lastIdx = sortedItems.indexOfFirst { it.id == lastId }
+            if (lastIdx != -1) {
+                val lastItem = sortedItems[lastIdx]
+                _currentQueueItemIndex.value = lastIdx
+                _paragraphs.value = lastItem.paragraphs
+                _title.value = lastItem.title
+            }
+        }
+
         viewModelScope.launch {
             _translationLogs.value = transactionLogRepository.getLogs()
         }
@@ -193,6 +215,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         val nextQIndex = qIndex + 1
                         _currentQueueItemIndex.value = nextQIndex
                         val nextItem = qList[nextQIndex]
+                        updateLastReadQueueItemId(nextItem.id)
                         _paragraphs.value = nextItem.paragraphs
                         _title.value = nextItem.title
                         _currentParagraphIndex.value = -2 // Announces title first
@@ -337,6 +360,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 sourceLang = settings.sourceLanguage,
                 targetLang = settings.targetLanguage,
                 customInstructions = settings.customInstructions,
+                disclaimerText = settings.disclaimerText,
+                disclaimerPosition = settings.disclaimerPosition,
                 logSteps = logSteps,
                 title = title,
                 onStepAdded = { step ->
@@ -428,6 +453,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     val newIndex = sortedItems.indexOfFirst { it.id == newItem.id }
                     if (newIndex != -1) {
                         _currentQueueItemIndex.value = newIndex
+                        updateLastReadQueueItemId(newItem.id)
                     }
 
                     if (_isPlaying.value) {
@@ -547,6 +573,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 sourceLang = settings.sourceLanguage,
                 targetLang = settings.targetLanguage,
                 customInstructions = settings.customInstructions,
+                disclaimerText = settings.disclaimerText,
+                disclaimerPosition = settings.disclaimerPosition,
                 logSteps = logSteps,
                 title = title,
                 onStepAdded = { step ->
@@ -612,6 +640,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         if (newIndex != -1) {
                             val item = qList[newIndex]
                             _currentQueueItemIndex.value = newIndex
+                            updateLastReadQueueItemId(item.id)
                             _paragraphs.value = item.paragraphs
                             _title.value = item.title
                             _currentParagraphIndex.value = -1
@@ -698,6 +727,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         if (index in qList.indices) {
             val item = qList[index]
             _currentQueueItemIndex.value = index
+            updateLastReadQueueItemId(item.id)
             _paragraphs.value = item.paragraphs
             _title.value = item.title
             _currentParagraphIndex.value = -1
@@ -710,6 +740,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         if (index in qList.indices) {
             val item = qList[index]
             _currentQueueItemIndex.value = index
+            updateLastReadQueueItemId(item.id)
             _paragraphs.value = item.paragraphs
             _title.value = item.title
             _currentParagraphIndex.value = -2 // Announces title first
@@ -722,6 +753,10 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     fun removeQueueItem(index: Int) {
         val qList = _queue.value.toMutableList()
         if (index in qList.indices) {
+            val itemToRemove = qList[index]
+            if (settings.lastReadQueueItemId == itemToRemove.id) {
+                updateLastReadQueueItemId("")
+            }
             val currentIdx = _currentQueueItemIndex.value
             if (currentIdx == index) {
                 pauseReading()
@@ -744,6 +779,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _title.value = "Trình duyệt"
         _currentParagraphIndex.value = -1
         _currentQueueItemIndex.value = -1
+        updateLastReadQueueItemId("")
         _queue.value = emptyList()
         _folders.value = emptyList()
         _activeTranslations.value = emptyList()
@@ -808,6 +844,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 sourceLang = settings.sourceLanguage,
                 targetLang = settings.targetLanguage,
                 customInstructions = settings.customInstructions,
+                disclaimerText = settings.disclaimerText,
+                disclaimerPosition = settings.disclaimerPosition,
                 logSteps = logSteps,
                 title = job.title,
                 onStepAdded = { step ->
@@ -878,6 +916,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         if (newIndex != -1) {
                             val item = qList[newIndex]
                             _currentQueueItemIndex.value = newIndex
+                            updateLastReadQueueItemId(item.id)
                             _paragraphs.value = item.paragraphs
                             _title.value = item.title
                             _currentParagraphIndex.value = -1
@@ -1171,6 +1210,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         val qList = _queue.value.toMutableList()
         val index = qList.indexOfFirst { it.id == itemId }
         if (index != -1) {
+            if (settings.lastReadQueueItemId == itemId) {
+                updateLastReadQueueItemId("")
+            }
             val currentIdx = _currentQueueItemIndex.value
             if (currentIdx == index) {
                 pauseReading()

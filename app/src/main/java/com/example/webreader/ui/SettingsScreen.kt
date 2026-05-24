@@ -126,6 +126,25 @@ fun SettingsScreen(
     var targetLanguage by remember { mutableStateOf(settings.targetLanguage) }
     var customInstructions by remember { mutableStateOf(settings.customInstructions) }
 
+    var disclaimerPosition by remember { mutableStateOf(settings.disclaimerPosition) }
+    var disclaimerText by remember { mutableStateOf(settings.disclaimerText) }
+    var isDisclaimerDropdownExpanded by remember { mutableStateOf(false) }
+
+    androidx.compose.runtime.LaunchedEffect(displayLang) {
+        val currentText = disclaimerText.trim()
+        val isDefault = currentText.isEmpty() ||
+                currentText == settings.defaultDisclaimerVi ||
+                currentText == settings.defaultDisclaimerZh ||
+                currentText == settings.defaultDisclaimerEn
+        if (isDefault) {
+            disclaimerText = when (displayLang) {
+                "zh" -> settings.defaultDisclaimerZh
+                "en" -> settings.defaultDisclaimerEn
+                else -> settings.defaultDisclaimerVi
+            }
+        }
+    }
+
     var apiKeyVisible by remember { mutableStateOf(false) }
     var isDropdownExpanded by remember { mutableStateOf(false) }
     var isEngineDropdownExpanded by remember { mutableStateOf(false) }
@@ -649,6 +668,119 @@ fun SettingsScreen(
                 }
             }
 
+            // Card cấu hình Disclaimer
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = appStrings.settingsDisclaimerTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Dropdown chọn vị trí Disclaimer
+                    ExposedDropdownMenuBox(
+                        expanded = isDisclaimerDropdownExpanded,
+                        onExpandedChange = { isDisclaimerDropdownExpanded = !isDisclaimerDropdownExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = when (disclaimerPosition) {
+                                "none" -> appStrings.disclaimerPosNone
+                                "top" -> appStrings.disclaimerPosTop
+                                "middle" -> appStrings.disclaimerPosMiddle
+                                "bottom" -> appStrings.disclaimerPosBottom
+                                else -> disclaimerPosition
+                            },
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text(appStrings.settingsDisclaimerPosition) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDisclaimerDropdownExpanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = isDisclaimerDropdownExpanded,
+                            onDismissRequest = { isDisclaimerDropdownExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(appStrings.disclaimerPosNone) },
+                                onClick = {
+                                    disclaimerPosition = "none"
+                                    isDisclaimerDropdownExpanded = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(appStrings.disclaimerPosTop) },
+                                onClick = {
+                                    disclaimerPosition = "top"
+                                    isDisclaimerDropdownExpanded = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(appStrings.disclaimerPosMiddle) },
+                                onClick = {
+                                    disclaimerPosition = "middle"
+                                    isDisclaimerDropdownExpanded = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(appStrings.disclaimerPosBottom) },
+                                onClick = {
+                                    disclaimerPosition = "bottom"
+                                    isDisclaimerDropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+
+                    if (disclaimerPosition != "none") {
+                        // Ô nhập nội dung Disclaimer
+                        OutlinedTextField(
+                            value = disclaimerText,
+                            onValueChange = { disclaimerText = it },
+                            label = { Text(appStrings.settingsDisclaimerText) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = false,
+                            maxLines = 6,
+                            textStyle = MaterialTheme.typography.bodyMedium
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    disclaimerText = when (displayLang) {
+                                        "zh" -> settings.defaultDisclaimerZh
+                                        "en" -> settings.defaultDisclaimerEn
+                                        else -> settings.defaultDisclaimerVi
+                                    }
+                                },
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Refresh,
+                                    contentDescription = appStrings.btnRestoreDefault,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(appStrings.btnRestoreDefault, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                }
+            }
+
             // Card cấu hình giọng đọc TTS
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -913,6 +1045,8 @@ fun SettingsScreen(
                     settings.sourceLanguage = sourceLanguage
                     settings.targetLanguage = targetLanguage
                     settings.customInstructions = customInstructions.trim()
+                    settings.disclaimerPosition = disclaimerPosition
+                    settings.disclaimerText = disclaimerText.trim()
                     viewModel.updateTtsSettings(ttsSpeed, ttsPitch, selectedEngine)
                     viewModel.checkAppUpdate()
                     onBackClick()
