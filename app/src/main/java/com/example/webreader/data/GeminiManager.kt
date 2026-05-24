@@ -19,6 +19,8 @@ class GeminiManager {
         SafetySetting(HarmCategory.DANGEROUS_CONTENT, BlockThreshold.NONE)
     )
 
+    private val keyCooldowns = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     private class TranslationNode(
         val originalText: String,
         var isLeaf: Boolean = true,
@@ -99,6 +101,26 @@ class GeminiManager {
             "provided content"
         )
         return keywords.any { errText.contains(it) }
+    }
+
+    private fun getSecondsUntilDailyReset(): Long {
+        val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Ho_Chi_Minh"))
+        val now = calendar.timeInMillis
+        
+        // Thiết lập mốc 15:00 hôm nay
+        calendar.set(java.util.Calendar.HOUR_OF_DAY, 15)
+        calendar.set(java.util.Calendar.MINUTE, 0)
+        calendar.set(java.util.Calendar.SECOND, 0)
+        calendar.set(java.util.Calendar.MILLISECOND, 0)
+        
+        var resetTime = calendar.timeInMillis
+        if (now >= resetTime) {
+            // Nếu đã qua 15:00, mốc reset tiếp theo là 15:00 ngày mai
+            calendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
+            resetTime = calendar.timeInMillis
+        }
+        
+        return (resetTime - now) / 1000
     }
 
     suspend fun translateTitle(
@@ -222,7 +244,7 @@ class GeminiManager {
                     3. **提取主体内容**: 识别原始文本中文章或章节的主体内容。完全过滤并移除所有噪点，包括广告、导航链接/按钮（如“下一章”、“目录”、“首页”）以及无关评论。
                     4. **翻译主体内容**: 将过滤后的主体内容从源语言 ($srcTextZh) 自然、通顺且流畅地翻译为目标语言 ($targetLang)，并匹配目标语言的文学或新闻等专业文体特点。
                     5. **保留结构**: 保留段落结构（使用空行 \n\n 明确分隔）。
-                    6. **无额外说明**: 在翻译后的标题下方返回翻译内容，用两个换行符 (\n\n) 分隔。不要包含任何介绍性或解释性文本（例如“以下是翻译内容...”）。仅返回格式为 'Title: ...' 的翻译标题和干净的主体翻译内容。$customPartZh
+                    6. **无额外说明**: 在翻译后的标题下方返回翻译内容，用两个换行符 (\n\n) 分隔。不要包含任何介绍性或解释性文本（例如“以下是翻译内容...”）。仅返回格式为 'Title: ...' 的翻译标题 and 干净的主体翻译内容。$customPartZh
                 """.trimIndent()
             } else {
                 """
@@ -303,22 +325,27 @@ class GeminiManager {
         }
 
         var success = false
-        val keysCount = apiKeys.size
+        val now = System.currentTimeMillis()
+        val activeKeys = apiKeys.filter { (keyCooldowns[it] ?: 0L) <= now }
+        val currentKeys = if (activeKeys.isNotEmpty()) activeKeys else apiKeys
+        val keysCount = currentKeys.size
         val chunkErrors = mutableListOf<String>()
 
         for (attempt in 0 until keysCount) {
             val keyIdx = (currentKeyIndexRef[0] + attempt) % keysCount
-            val apiKey = apiKeys[keyIdx]
+            val apiKey = currentKeys[keyIdx]
+            val originalIndex = apiKeys.indexOf(apiKey)
+            val keyNum = originalIndex + 1
             val keySnippet = if (apiKey.length > 8) {
                 apiKey.take(4) + "..." + apiKey.takeLast(4)
             } else {
-                "Key ${keyIdx + 1}"
+                "Key $keyNum"
             }
 
             val stepMsg = if (depth > 0) {
-                "Đang thử phần con $chunkInfo (Kích thước: ${chunk.length} ký tự) với API Key số ${keyIdx + 1} ($keySnippet)..."
+                "Đang thử phần con $chunkInfo (Kích thước: ${chunk.length} ký tự) với API Key số $keyNum ($keySnippet)..."
             } else {
-                "Đang thử dịch $chunkInfo (Kích thước: ${chunk.length} ký tự) với API Key số ${keyIdx + 1} ($keySnippet)..."
+                "Đang thử dịch $chunkInfo (Kích thước: ${chunk.length} ký tự) với API Key số $keyNum ($keySnippet)..."
             }
             addStep(stepMsg)
 
@@ -379,7 +406,7 @@ class GeminiManager {
                         "zh" -> {
                             val srcLangTextZh = if (sourceLang.equals("Auto", ignoreCase = true)) "自动检测" else sourceLang
                             """
-                                请将以下原始文本从源语言 ($srcLangTextZh) 翻译为目标语言 ($targetLang)。如果存在 any 广告 or 导航链接，请进行过滤，并自然且专业地翻译核心内容：
+                                请将以下原始文本从源语言 ($srcLangTextZh) 翻译为目标语言 ($targetLang)。如果存在任何广告或导航链接，请进行过滤，并自然且专业地翻译核心内容：
                                 
                                 $chunk
                             """.trimIndent()
@@ -462,9 +489,9 @@ class GeminiManager {
                     success = true
                     currentKeyIndexRef[0] = keyIdx
                     val successMsg = if (depth > 0) {
-                        "Dịch thành công phần con $chunkInfo với API Key số ${keyIdx + 1} ($keySnippet)."
+                        "Dịch thành công phần con $chunkInfo với API Key số $keyNum ($keySnippet)."
                     } else {
-                        "Dịch thành công $chunkInfo với API Key số ${keyIdx + 1} ($keySnippet)."
+                        "Dịch thành công $chunkInfo với API Key số $keyNum ($keySnippet)."
                     }
                     addStep(successMsg)
                     break
@@ -474,9 +501,29 @@ class GeminiManager {
             } catch (e: Exception) {
                 val detailedErr = getDetailedErrorMessage(e)
                 val isSafety = isSafetyError(e)
-                val errLabel = if (isSafety) "Lỗi An toàn (Safety Blocked)" else "Lỗi kỹ thuật"
+                val errText = detailedErr.lowercase()
+                val isQuota = errText.contains("429") || errText.contains("resource_exhausted") || errText.contains("quota")
                 
-                addStep("Thất bại $chunkInfo với API Key số ${keyIdx + 1} ($keySnippet) [$errLabel]. Chi tiết: $detailedErr")
+                if (isQuota) {
+                    val cooldownSec = getSecondsUntilDailyReset()
+                    val isDaily = errText.contains("day") || errText.contains("daily") || errText.contains("perday")
+                    val finalCooldownSec = if (isDaily) cooldownSec else 60L
+                    keyCooldowns[apiKey] = System.currentTimeMillis() + (finalCooldownSec * 1000L)
+                    
+                    val durationStr = if (isDaily) {
+                        val hr = finalCooldownSec / 3600
+                        val min = (finalCooldownSec % 3600) / 60
+                        "${hr} giờ ${min} phút (sẽ tự động reset lúc 15:00)"
+                    } else {
+                        "60 giây"
+                    }
+                    val quotaType = if (isDaily) "ngày (Per Day)" else "phút (Per Minute)"
+                    addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong $durationStr do vượt hạn ngạch $quotaType (HTTP 429).")
+                }
+
+                val errLabel = if (isSafety) "Lỗi An toàn (Safety Blocked)" else if (isQuota) "Lỗi Hạn ngạch (Quota Exceeded)" else "Lỗi kỹ thuật"
+                
+                addStep("Thất bại $chunkInfo với API Key số $keyNum ($keySnippet) [$errLabel]. Chi tiết: $detailedErr")
                 chunkErrors.add("[$keySnippet] [$errLabel]: $detailedErr")
 
                 if (isSafety && chunk.length > 250) {
