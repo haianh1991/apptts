@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedTextField
@@ -535,7 +536,9 @@ fun ReaderSheet(
                     }
                     1 -> {
                         val activeTranslations by viewModel.activeTranslations.collectAsState()
-                        val translatingItems = activeTranslations.filter { it.status == TranslationStatus.TRANSLATING }
+                        val translatingItems = activeTranslations.filter { 
+                            it.status == TranslationStatus.TRANSLATING || it.status == TranslationStatus.WAITING 
+                        }
                         val failedItems = activeTranslations.filter { it.status == TranslationStatus.FAILED }
                         
                         val listItems = remember(translatingItems, failedItems, folders, queue, expandedFolderIds) {
@@ -753,12 +756,24 @@ fun ReaderSheet(
                                             }
                                             is QueueListItem.TranslatingItem -> {
                                                 val transItem = item.item
+                                                val isWaiting = transItem.status == TranslationStatus.WAITING
                                                 Card(
                                                     modifier = Modifier.fillMaxWidth(),
                                                     colors = CardDefaults.cardColors(
-                                                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                                                        containerColor = if (isWaiting) {
+                                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                                        } else {
+                                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                                                        }
                                                     ),
-                                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                                                    border = BorderStroke(
+                                                        1.dp,
+                                                        if (isWaiting) {
+                                                            MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                                        } else {
+                                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                                        }
+                                                    )
                                                 ) {
                                                     Row(
                                                         modifier = Modifier
@@ -766,23 +781,33 @@ fun ReaderSheet(
                                                             .padding(12.dp),
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
-                                                        CircularProgressIndicator(
-                                                            modifier = Modifier.size(20.dp),
-                                                            strokeWidth = 2.dp,
-                                                            color = MaterialTheme.colorScheme.primary
-                                                        )
+                                                        if (transItem.status == TranslationStatus.TRANSLATING) {
+                                                            CircularProgressIndicator(
+                                                                modifier = Modifier.size(20.dp),
+                                                                strokeWidth = 2.dp,
+                                                                color = MaterialTheme.colorScheme.primary
+                                                            )
+                                                        } else {
+                                                            Icon(
+                                                                imageVector = Icons.Filled.History,
+                                                                contentDescription = "Waiting",
+                                                                tint = MaterialTheme.colorScheme.outline,
+                                                                modifier = Modifier.size(20.dp)
+                                                            )
+                                                        }
                                                         Spacer(modifier = Modifier.width(12.dp))
                                                         Column(modifier = Modifier.weight(1f)) {
                                                             Text(
                                                                 text = transItem.title,
                                                                 style = MaterialTheme.typography.bodyMedium,
                                                                 fontWeight = FontWeight.Bold,
-                                                                maxLines = 1
+                                                                maxLines = 1,
+                                                                color = if (isWaiting) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurface
                                                             )
                                                             Text(
                                                                 text = transItem.currentStep ?: appStrings.readerPreparingTranslation,
                                                                 style = MaterialTheme.typography.bodySmall,
-                                                                color = MaterialTheme.colorScheme.primary,
+                                                                color = if (isWaiting) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary,
                                                                 fontWeight = FontWeight.Medium,
                                                                 maxLines = 2,
                                                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
