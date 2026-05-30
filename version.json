@@ -1,7 +1,7 @@
 {
-  "versionCode": 18,
-  "versionName": "1.4.4",
+  "versionCode": 19,
+  "versionName": "1.4.5",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.4.4.apk",
-  "releaseNotes": "Cập nhật v1.4.4: Tối ưu hóa chất lượng dịch thuật và xử lý rác trang web (Skillopt) sử dụng cấu trúc XML và Few-shot prompting, giúp tăng độ chính xác, loại bỏ menu quảng cáo triệt để và dịch văn học tự nhiên trôi chảy hơn."
+  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.4.5.apk",
+  "releaseNotes": "Cập nhật v1.4.5: Sửa lỗi tính năng API Cooldown, phân biệt chính xác lỗi hạn mức ngày (RPD) để khóa key lâu dài đến 15:00 ngày hôm sau; hỗ trợ tùy chỉnh giới hạn số từ tối đa mỗi phân đoạn (Chunk) trong Cài đặt (mặc định giảm xuống 6000 từ)."
 }
