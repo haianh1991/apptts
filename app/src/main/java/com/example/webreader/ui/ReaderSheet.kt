@@ -915,8 +915,13 @@ fun ReaderSheet(
                                                     isPlaying = isPlaying,
                                                     isReading = qItem.id == lastReadQueueItemId,
                                                     onPlayPause = {
-                                                        if (isCurrent && isPlaying) {
-                                                            viewModel.pauseReading()
+                                                        if (isCurrent) {
+                                                            if (isPlaying) {
+                                                                viewModel.pauseReading()
+                                                            } else {
+                                                                viewModel.resumeReading()
+                                                                activeTab = 0
+                                                            }
                                                         } else {
                                                             viewModel.playQueueItemById(qItem.id)
                                                             activeTab = 0
@@ -947,8 +952,13 @@ fun ReaderSheet(
                                                     isPlaying = isPlaying,
                                                     isReading = qItem.id == lastReadQueueItemId,
                                                     onPlayPause = {
-                                                        if (isCurrent && isPlaying) {
-                                                            viewModel.pauseReading()
+                                                        if (isCurrent) {
+                                                            if (isPlaying) {
+                                                                viewModel.pauseReading()
+                                                            } else {
+                                                                viewModel.resumeReading()
+                                                                activeTab = 0
+                                                            }
                                                         } else {
                                                             viewModel.playQueueItemById(qItem.id)
                                                             activeTab = 0
@@ -978,8 +988,13 @@ fun ReaderSheet(
                                                     isPlaying = isPlaying,
                                                     isReading = qItem.id == lastReadQueueItemId,
                                                     onPlayPause = {
-                                                        if (isCurrent && isPlaying) {
-                                                            viewModel.pauseReading()
+                                                        if (isCurrent) {
+                                                            if (isPlaying) {
+                                                                viewModel.pauseReading()
+                                                            } else {
+                                                                viewModel.resumeReading()
+                                                                activeTab = 0
+                                                            }
                                                         } else {
                                                             viewModel.playQueueItemById(qItem.id)
                                                             activeTab = 0

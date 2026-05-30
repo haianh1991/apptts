@@ -1,7 +1,7 @@
 {
-  "versionCode": 19,
-  "versionName": "1.4.5",
+  "versionCode": 20,
+  "versionName": "1.4.6",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.4.5.apk",
-  "releaseNotes": "Cập nhật v1.4.5: Sửa lỗi tính năng API Cooldown, phân biệt chính xác lỗi hạn mức ngày (RPD) để khóa key lâu dài đến 15:00 ngày hôm sau; hỗ trợ tùy chỉnh giới hạn số từ tối đa mỗi phân đoạn (Chunk) trong Cài đặt (mặc định giảm xuống 6000 từ)."
+  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.4.6.apk",
+  "releaseNotes": "Cập nhật v1.4.6: Nâng cấp lưu vị trí đoạn văn đang đọc dở (khôi phục và nghe tiếp đúng đoạn khi mở lại app); tự động lưu bản dịch ở chế độ Đọc ngay vào danh sách Đã dịch sau khi hoàn tất dịch toàn bộ."
 }

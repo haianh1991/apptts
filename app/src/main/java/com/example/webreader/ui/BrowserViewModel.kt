@@ -73,8 +73,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val lastReadQueueItemId: StateFlow<String> = _lastReadQueueItemId
 
     private fun updateLastReadQueueItemId(itemId: String) {
+        val oldId = settings.lastReadQueueItemId
         settings.lastReadQueueItemId = itemId
         _lastReadQueueItemId.value = itemId
+        if (oldId != itemId) {
+            settings.lastReadParagraphIndex = 0
+        }
     }
 
     private val _url = MutableStateFlow("https://news.google.com")
@@ -156,6 +160,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 _currentQueueItemIndex.value = lastIdx
                 _paragraphs.value = lastItem.paragraphs
                 _title.value = lastItem.title
+                val lastParagraphIdx = settings.lastReadParagraphIndex
+                if (lastParagraphIdx in lastItem.paragraphs.indices) {
+                    _currentParagraphIndex.value = lastParagraphIdx
+                } else {
+                    _currentParagraphIndex.value = -1
+                }
             }
         }
 
@@ -165,6 +175,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         ttsManager.setCallbacks(
             onStart = { index ->
                 _currentParagraphIndex.value = index
+                if (index >= 0) {
+                    settings.lastReadParagraphIndex = index
+                }
             },
             onDone = { index ->
                 playNextParagraph(index)
@@ -243,6 +256,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         val paragraphsList = _paragraphs.value
         if (index in paragraphsList.indices) {
             _currentParagraphIndex.value = index
+            settings.lastReadParagraphIndex = index
             _isPlaying.value = true
             ttsManager.speak(paragraphsList[index], index, settings.ttsSpeed, settings.ttsPitch)
         }
@@ -333,6 +347,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
 
         val logId = java.util.UUID.randomUUID().toString()
+        val newItemId = java.util.UUID.randomUUID().toString()
         viewModelScope.launch {
             _isTranslating.value = true
             _showReaderSheet.value = true
@@ -411,6 +426,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                                 _url.value = url
                                 updateBookmarkStatus()
                                 _currentQueueItemIndex.value = -1
+                                updateLastReadQueueItemId(newItemId)
                                 
                                 // Auto-play paragraph 0
                                 _currentParagraphIndex.value = 0
@@ -445,7 +461,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 
                 if (rawParagraphs.isNotEmpty()) {
                     val newItem = QueueItem(
-                        id = java.util.UUID.randomUUID().toString(),
+                        id = newItemId,
                         title = currentTitle,
                         url = url,
                         paragraphs = rawParagraphs,
@@ -461,6 +477,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         _currentQueueItemIndex.value = newIndex
                         updateLastReadQueueItemId(newItem.id)
                     }
+
+                    android.widget.Toast.makeText(
+                        getApplication(),
+                        "Đã dịch xong và lưu vào danh sách: $currentTitle",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
 
                     if (_isPlaying.value) {
                         val currentIndex = _currentParagraphIndex.value

@@ -57,6 +57,10 @@ class SettingsRepository(context: Context) {
         get() = prefs.getString("last_read_queue_item_id", "") ?: ""
         set(value) = prefs.edit().putString("last_read_queue_item_id", value).apply()
 
+    var lastReadParagraphIndex: Int
+        get() = prefs.getInt("last_read_paragraph_index", 0)
+        set(value) = prefs.edit().putInt("last_read_paragraph_index", value).apply()
+
     var sourceLanguage: String
         get() = prefs.getString("source_language", "Auto") ?: "Auto"
         set(value) = prefs.edit().putString("source_language", value).apply()

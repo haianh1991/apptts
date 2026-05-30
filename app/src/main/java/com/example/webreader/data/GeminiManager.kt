@@ -799,7 +799,8 @@ class GeminiManager {
         title: String? = null,
         onStepAdded: ((String) -> Unit)? = null,
         onContentUpdated: ((String) -> Unit)? = null,
-        uiLanguage: String = "vi"
+        uiLanguage: String = "vi",
+        maxWordCount: Int = 6000
     ): Result<String> = withContext(Dispatchers.IO) {
         fun addStep(step: String) {
             logSteps.add(step)
@@ -816,7 +817,7 @@ class GeminiManager {
             addStep("Lỗi khởi tạo: $errMsg")
             return@withContext Result.failure(IllegalArgumentException(errMsg))
         }
-        val chunks = splitTextIntoChunks(text, 8000)
+        val chunks = splitTextIntoChunks(text, maxWordCount)
         val totalWords = countWords(text)
         addStep("Khởi chạy tiến trình dịch thuật. Kích thước văn bản gốc: ${text.length} ký tự (khoảng $totalWords từ), chia thành ${chunks.size} phần.")
         addStep("Ngôn ngữ dịch: $sourceLang -> $targetLang")
@@ -944,7 +945,7 @@ class GeminiManager {
         return trimmed.split(Regex("\\s+")).size
     }
 
-    private fun splitTextIntoChunks(text: String, maxWordCount: Int = 8000): List<String> {
+    private fun splitTextIntoChunks(text: String, maxWordCount: Int = 6000): List<String> {
         val totalWords = countWords(text)
         if (totalWords <= maxWordCount) return listOf(text)
 
