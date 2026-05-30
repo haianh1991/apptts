@@ -103,6 +103,27 @@ class GeminiManager {
         return keywords.any { errText.contains(it) }
     }
 
+    private fun isNetworkError(e: Throwable): Boolean {
+        var cause: Throwable? = e
+        while (cause != null) {
+            if (cause is java.io.IOException || 
+                cause is java.net.ConnectException || 
+                cause is java.net.UnknownHostException || 
+                cause is java.net.SocketTimeoutException ||
+                cause::class.simpleName == "ConnectException" ||
+                cause::class.simpleName == "UnknownHostException" ||
+                cause::class.simpleName == "SocketTimeoutException" ||
+                cause.message?.contains("timeout", ignoreCase = true) == true ||
+                cause.message?.contains("connect", ignoreCase = true) == true
+            ) {
+                return true
+            }
+            cause = cause.cause
+        }
+        return false
+    }
+
+
     private fun getSecondsUntilDailyReset(): Long {
         val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Ho_Chi_Minh"))
         val now = calendar.timeInMillis
@@ -609,90 +630,123 @@ class GeminiManager {
             } catch (e: Exception) {
                 val detailedErr = getDetailedErrorMessage(e)
                 val isSafety = isSafetyError(e)
+                val isNetwork = isNetworkError(e)
                 val errText = detailedErr.lowercase()
                 val isQuota = errText.contains("429") || errText.contains("resource_exhausted") || errText.contains("quota")
-                
-                if (isQuota) {
-                    val cooldownSec = getSecondsUntilDailyReset()
-                    val isDaily = errText.contains("day") || errText.contains("daily") || errText.contains("perday")
-                    val finalCooldownSec = if (isDaily) cooldownSec else 60L
-                    keyCooldowns[apiKey] = System.currentTimeMillis() + (finalCooldownSec * 1000L)
+                val isPermissionDenied = errText.contains("403") || errText.contains("permission_denied") || errText.contains("permission denied") || errText.contains("api key")
+                val isNotFound = errText.contains("404") || errText.contains("not_found") || errText.contains("not found")
+                val isBadRequest = errText.contains("400") || errText.contains("invalid_argument") || errText.contains("failed_precondition") || errText.contains("failed precondition")
+                val isServerErr = errText.contains("500") || errText.contains("503") || errText.contains("504") || errText.contains("internal") || errText.contains("unavailable")
+
+                if (isNetwork) {
+                    val errLabel = "Lỗi kết nối mạng (Internet/Timeout)"
+                    addStep("Thất bại $chunkInfo với API Key số $keyNum ($keySnippet) [$errLabel]. Chi tiết: $detailedErr")
+                    chunkErrors.add("[$keySnippet] [$errLabel]: $detailedErr")
+                } else if (isSafety) {
+                    val errLabel = "Lỗi An toàn (Safety Blocked)"
+                    addStep("Thất bại $chunkInfo với API Key số $keyNum ($keySnippet) [$errLabel]. Chi tiết: $detailedErr")
+                    chunkErrors.add("[$keySnippet] [$errLabel]: $detailedErr")
                     
-                    val durationStr = if (isDaily) {
-                        val hr = finalCooldownSec / 3600
-                        val min = (finalCooldownSec % 3600) / 60
-                        "${hr} giờ ${min} phút (sẽ tự động reset lúc 15:00)"
+                    if (chunk.length > 250) {
+                        addStep("Kích hoạt cơ chế tự động chia nhỏ đoạn văn $chunkInfo (kích thước: ${chunk.length} ký tự > 250 ký tự) làm hai để gửi lại.")
+                        
+                        val splitIdx = findGoodSplitPointForSafety(chunk)
+                        val leftText = chunk.substring(0, splitIdx)
+                        val rightText = chunk.substring(splitIdx)
+                        
+                        node.isLeaf = false
+                        val leftNode = TranslationNode(leftText)
+                        val rightNode = TranslationNode(rightText)
+                        node.left = leftNode
+                        node.right = rightNode
+                        
+                        val leftSuccess = translateChunkRecursive(
+                            chunk = leftText,
+                            apiKeys = apiKeys,
+                            currentKeyIndexRef = currentKeyIndexRef,
+                            modelName = modelName,
+                            sourceLang = sourceLang,
+                            targetLang = targetLang,
+                            customInstructions = customInstructions,
+                            disclaimerText = disclaimerText,
+                            logSteps = logSteps,
+                            onStepAdded = onStepAdded,
+                            onContentUpdated = onContentUpdated,
+                            node = leftNode,
+                            uiLanguage = uiLanguage,
+                            isFirstChunk = isFirstChunk,
+                            title = title,
+                            systemInstructionWithTitle = systemInstructionWithTitle,
+                            systemInstructionStandard = systemInstructionStandard,
+                            chunkInfo = "$chunkInfo.1",
+                            depth = depth + 1
+                        )
+                        
+                        val rightSuccess = translateChunkRecursive(
+                            chunk = rightText,
+                            apiKeys = apiKeys,
+                            currentKeyIndexRef = currentKeyIndexRef,
+                            modelName = modelName,
+                            sourceLang = sourceLang,
+                            targetLang = targetLang,
+                            customInstructions = customInstructions,
+                            disclaimerText = disclaimerText,
+                            logSteps = logSteps,
+                            onStepAdded = onStepAdded,
+                            onContentUpdated = onContentUpdated,
+                            node = rightNode,
+                            uiLanguage = uiLanguage,
+                            isFirstChunk = false,
+                            title = null,
+                            systemInstructionWithTitle = systemInstructionWithTitle,
+                            systemInstructionStandard = systemInstructionStandard,
+                            chunkInfo = "$chunkInfo.2",
+                            depth = depth + 1
+                        )
+                        
+                        success = leftSuccess && rightSuccess
+                        return@withContext success
                     } else {
-                        "60 giây"
+                        addStep("Phân đoạn nhỏ ($chunkInfo) bị chặn bởi bộ lọc an toàn. Ngừng thử các phím khác. Sử dụng văn bản gốc làm fallback.")
+                        break // Break out of key attempt loop
                     }
-                    val quotaType = if (isDaily) "ngày (Per Day)" else "phút (Per Minute)"
-                    addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong $durationStr do vượt hạn ngạch $quotaType (HTTP 429).")
-                }
+                } else {
+                    val errLabel = when {
+                        isQuota -> "Lỗi Hạn ngạch (Quota Exceeded)"
+                        isPermissionDenied -> "Lỗi Xác thực (Permission Denied)"
+                        isNotFound -> "Mô hình Không tìm thấy (Not Found)"
+                        isBadRequest -> "Yêu cầu Không hợp lệ (Bad Request/Precondition)"
+                        isServerErr -> "Lỗi Máy chủ (Server Error)"
+                        else -> "Lỗi kỹ thuật"
+                    }
 
-                val errLabel = if (isSafety) "Lỗi An toàn (Safety Blocked)" else if (isQuota) "Lỗi Hạn ngạch (Quota Exceeded)" else "Lỗi kỹ thuật"
-                
-                addStep("Thất bại $chunkInfo với API Key số $keyNum ($keySnippet) [$errLabel]. Chi tiết: $detailedErr")
-                chunkErrors.add("[$keySnippet] [$errLabel]: $detailedErr")
+                    if (isQuota) {
+                        val cooldownSec = getSecondsUntilDailyReset()
+                        val isDaily = errText.contains("day") || errText.contains("daily") || errText.contains("perday")
+                        val finalCooldownSec = if (isDaily) cooldownSec else 60L
+                        keyCooldowns[apiKey] = System.currentTimeMillis() + (finalCooldownSec * 1000L)
+                        
+                        val durationStr = if (isDaily) {
+                            val hr = finalCooldownSec / 3600
+                            val min = (finalCooldownSec % 3600) / 60
+                            "${hr} giờ ${min} phút (sẽ tự động reset lúc 15:00)"
+                        } else {
+                            "60 giây"
+                        }
+                        val quotaType = if (isDaily) "ngày (Per Day)" else "phút (Per Minute)"
+                        addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong $durationStr do vượt hạn ngạch $quotaType (HTTP 429).")
+                    } else if (isPermissionDenied || isNotFound || (isBadRequest && errText.contains("failed_precondition"))) {
+                        keyCooldowns[apiKey] = System.currentTimeMillis() + (24 * 3600 * 1000L) // 24 hours
+                        addStep("API Key số $keyNum ($keySnippet) bị vô hiệu hóa trong 24 giờ do lỗi xác thực/cấu hình (HTTP 403/404/Precondition).")
+                    } else if (isServerErr) {
+                        keyCooldowns[apiKey] = System.currentTimeMillis() + (15 * 1000L) // 15 seconds
+                        addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong 15 giây do lỗi máy chủ Google (HTTP 500/503/504).")
+                    } else {
+                        keyCooldowns[apiKey] = System.currentTimeMillis() + (5 * 1000L) // 5 seconds
+                    }
 
-                if (isSafety && chunk.length > 250) {
-                    addStep("Kích hoạt cơ chế tự động chia nhỏ đoạn văn $chunkInfo (kích thước: ${chunk.length} ký tự > 250 ký tự) làm hai để gửi lại.")
-                    
-                    val splitIdx = findGoodSplitPointForSafety(chunk)
-                    val leftText = chunk.substring(0, splitIdx)
-                    val rightText = chunk.substring(splitIdx)
-                    
-                    node.isLeaf = false
-                    val leftNode = TranslationNode(leftText)
-                    val rightNode = TranslationNode(rightText)
-                    node.left = leftNode
-                    node.right = rightNode
-                    
-                    val leftSuccess = translateChunkRecursive(
-                        chunk = leftText,
-                        apiKeys = apiKeys,
-                        currentKeyIndexRef = currentKeyIndexRef,
-                        modelName = modelName,
-                        sourceLang = sourceLang,
-                        targetLang = targetLang,
-                        customInstructions = customInstructions,
-                        disclaimerText = disclaimerText,
-                        logSteps = logSteps,
-                        onStepAdded = onStepAdded,
-                        onContentUpdated = onContentUpdated,
-                        node = leftNode,
-                        uiLanguage = uiLanguage,
-                        isFirstChunk = isFirstChunk,
-                        title = title,
-                        systemInstructionWithTitle = systemInstructionWithTitle,
-                        systemInstructionStandard = systemInstructionStandard,
-                        chunkInfo = "$chunkInfo.1",
-                        depth = depth + 1
-                    )
-                    
-                    val rightSuccess = translateChunkRecursive(
-                        chunk = rightText,
-                        apiKeys = apiKeys,
-                        currentKeyIndexRef = currentKeyIndexRef,
-                        modelName = modelName,
-                        sourceLang = sourceLang,
-                        targetLang = targetLang,
-                        customInstructions = customInstructions,
-                        disclaimerText = disclaimerText,
-                        logSteps = logSteps,
-                        onStepAdded = onStepAdded,
-                        onContentUpdated = onContentUpdated,
-                        node = rightNode,
-                        uiLanguage = uiLanguage,
-                        isFirstChunk = false,
-                        title = null,
-                        systemInstructionWithTitle = systemInstructionWithTitle,
-                        systemInstructionStandard = systemInstructionStandard,
-                        chunkInfo = "$chunkInfo.2",
-                        depth = depth + 1
-                    )
-                    
-                    success = leftSuccess && rightSuccess
-                    return@withContext success
+                    addStep("Thất bại $chunkInfo với API Key số $keyNum ($keySnippet) [$errLabel]. Chi tiết: $detailedErr")
+                    chunkErrors.add("[$keySnippet] [$errLabel]: $detailedErr")
                 }
             }
         }
