@@ -735,8 +735,8 @@ class GeminiManager {
                             val durationSec = exactCooldownMs / 1000
                             addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong $durationSec giây theo chỉ thị từ Google (HTTP 429).")
                         } else {
+                            val isDaily = errText.contains("day") || errText.contains("daily") || errText.contains("perday") || (errText.contains("free_tier_requests") && !errText.contains("per_minute") && !errText.contains("per_min"))
                             val cooldownSec = getSecondsUntilDailyReset()
-                            val isDaily = errText.contains("day") || errText.contains("daily") || errText.contains("perday")
                             val finalCooldownSec = if (isDaily) cooldownSec else 60L
                             keyCooldowns[apiKey] = System.currentTimeMillis() + (finalCooldownSec * 1000L)
                             
