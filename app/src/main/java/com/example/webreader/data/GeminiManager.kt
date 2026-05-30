@@ -186,116 +186,221 @@ class GeminiManager {
         val hasCustom = customInstructions.isNotBlank()
         val hasDisclaimer = disclaimerText.isNotBlank()
 
-        val customPart = if (hasCustom) {
-            "\n\n# CHỈ DẪN DỊCH THUẬT BỔ SUNG\n${customInstructions.trim()}"
-        } else ""
-
-        val customPartEn = if (hasCustom) {
-            "\n\n# ADDITIONAL TRANSLATION INSTRUCTIONS\n${customInstructions.trim()}"
-        } else ""
-
-        val customPartZh = if (hasCustom) {
-            "\n\n# 附加翻译说明\n${customInstructions.trim()}"
-        } else ""
-
         val srcTextVi = if (sourceLang.equals("Auto", ignoreCase = true)) "tự động phát hiện" else sourceLang
         val srcTextZh = if (sourceLang.equals("Auto", ignoreCase = true)) "自动检测" else sourceLang
         val srcTextEn = if (sourceLang.equals("Auto", ignoreCase = true)) "automatically detected" else sourceLang
 
+        val customPart = if (hasCustom) {
+            "\n\n<user_custom_rules>\n${customInstructions.trim()}\n</user_custom_rules>"
+        } else ""
+
+        val disclaimerPart = if (hasDisclaimer) {
+            "\n\n<system_warning>\n${disclaimerText.trim()}\n</system_warning>"
+        } else ""
+
         var systemInstruction = ""
 
         if (uiLanguage == "vi") {
-            systemInstruction = if (hasTitle) {
+            val titleRuleVi = if (hasTitle) {
+                "1. **Dịch tiêu đề**: Dịch tiêu đề gốc từ ngôn ngữ gốc ($srcTextVi) sang ngôn ngữ đích ($targetLang) một cách tự nhiên. Dòng đầu tiên của kết quả trả về BẮT BUỘC phải tuân thủ định dạng chính xác sau đây:\n   Title: [Tiêu đề dịch]\n   Nội dung bản dịch sạch sẽ nằm ở phía dưới, cách tiêu đề dịch bởi hai dấu xuống dòng (\\n\\n)."
+            } else {
+                "1. **Không dịch tiêu đề**: Văn bản này là phân đoạn tiếp theo và không chứa tiêu đề chương truyện. Tuyệt đối không tự ý thêm dòng 'Title: ...' ở đầu."
+            }
+
+            val fewShotVi = if (hasTitle) {
                 """
-                    # VAI TRÒ & MỤC TIÊU
-                    Bạn là một trợ lý dịch thuật và trích xuất nội dung thông minh. Nhiệm vụ của bạn là nhận tiêu đề gốc và văn bản thô được trích xuất từ một trang web (chứa các thành phần thừa như menu điều hướng, quảng cáo xen kẽ, các nút bấm chuyển trang, bình luận bên lề), lọc bỏ rác và dịch sang ngôn ngữ đích một cách tự nhiên và chính xác nhất.
-                    
-                    # QUY TRÌNH THỰC HIỆN
-                    1. **Dịch tiêu đề**: Dịch tiêu đề gốc từ ngôn ngữ gốc ($srcTextVi) sang ngôn ngữ đích ($targetLang) một cách tự nhiên.
-                    2. **Định dạng tiêu đề**: Trả về tiêu đề dịch ở dòng đầu tiên dưới định dạng chính xác sau đây:
-                       Title: [Tiêu đề đã dịch]
-                    3. **Lọc nội dung chính**: Nhận diện phần nội dung bài viết/chương truyện chính trong văn bản thô. Loại bỏ hoàn toàn các thành phần thừa, quảng cáo xen kẽ giữa các câu, các nút bấm (như "Chương sau", "Mục lục", "Trang chủ") và bình luận không liên quan của độc giả.
-                    4. **Dịch nội dung**: Dịch phần nội dung chính vừa lọc được từ ngôn ngữ gốc ($srcTextVi) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, mượt mà, trôi chảy nhất và chuẩn ngữ cảnh văn học/báo chí của ngôn ngữ đích.
-                    5. **Giữ cấu trúc**: Giữ nguyên cấu trúc phân đoạn (phân tách rõ ràng bằng các dòng trống \n\n).
-                    6. **Không thêm chú thích**: Trả về nội dung dịch bên dưới tiêu đề dịch, cách nhau bởi hai dấu xuống dòng (\n\n). Tuyệt đối không thêm bất kỳ văn bản giới thiệu hay chú thích ngoài lề nào khác. Chỉ trả về tiêu đề dịch định dạng Title: ... và văn bản dịch sạch của nội dung chính.$customPart
+                <few_shot_examples>
+                Ví dụ:
+                Input:
+                Tiêu đề gốc: 第一章: 宗門
+                Văn bản gốc:
+                第一章: 宗門
+                [上一章] [目錄] [下一章]
+                &emsp;&emsp;進屋一米不到，是一塊立著的大木板。<br />
+                <script>loadAdv(5,0);</script><br />
+                &emsp;&emsp;木板左側是空道。
+                
+                Output:
+                Title: Chương 1: Tông Môn
+                
+                Vào cửa chưa đầy một mét là một tấm gỗ lớn dựng đứng.
+                
+                Phía bên trái tấm gỗ là một lối đi trống.
+                </few_shot_examples>
                 """.trimIndent()
             } else {
                 """
-                    # VAI TRÒ & MỤC TIÊU
-                    Bạn là một trợ lý dịch thuật và trích xuất nội dung thông minh. Nhiệm vụ của bạn là nhận văn bản thô được trích xuất từ một trang web (chứa các thành phần thừa như menu điều hướng, quảng cáo xen kẽ, các nút bấm chuyển trang, bình luận bên lề), lọc bỏ rác và dịch sang ngôn ngữ đích một cách tự nhiên và chính xác nhất.
-                    
-                    # QUY TRÌNH THỰC HIỆN
-                    1. **Lọc nội dung chính**: Nhận diện phần nội dung bài viết/chương truyện chính trong văn bản thô. Loại bỏ hoàn toàn các thành phần thừa, quảng cáo xen kẽ giữa các câu, các nút bấm (như "Chương sau", "Mục lục", "Trang chủ") và bình luận không liên quan của độc giả.
-                    2. **Dịch nội dung**: Dịch phần nội dung chính vừa lọc được từ ngôn ngữ gốc ($srcTextVi) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, mượt mà, trôi chảy nhất và chuẩn ngữ cảnh văn học/báo chí của ngôn ngữ đích.
-                    3. **Giữ cấu trúc**: Giữ nguyên cấu trúc phân đoạn (phân tách rõ ràng bằng các dòng trống \n\n).
-                    4. **Không thêm chú thích**: Tuyệt đối không thêm bất kỳ văn bản giới thiệu hay chú thích ngoài lề nào khác. Chỉ trả về văn bản dịch sạch của nội dung chính.$customPart
+                <few_shot_examples>
+                Ví dụ:
+                Input:
+                &emsp;&emsp;進屋一米不到，是一塊立著的大木板。<br />
+                <script>loadAdv(5,0);</script><br />
+                &emsp;&emsp;木板左側是空道。
+                
+                Output:
+                Vào cửa chưa đầy một mét là một tấm gỗ lớn dựng đứng.
+                
+                Phía bên trái tấm gỗ là một lối đi trống.
+                </few_shot_examples>
                 """.trimIndent()
             }
+
+            systemInstruction = """
+                <role>
+                Bạn là chuyên gia dịch thuật văn học và trích xuất nội dung sạch từ trang web.
+                </role>
+                
+                <rules>
+                $titleRuleVi
+                2. **Lọc sạch rác trang web**: Nhận diện phần nội dung bài viết/chương truyện chính trong văn bản thô. Loại bỏ hoàn toàn các thành phần thừa, quảng cáo và menu điều hướng bao gồm:
+                   - Các nút bấm, liên kết chuyển trang (ví dụ: "Chương sau", "Mục lục", "Trang chủ", "上一章", "目錄", "下一章", "投票推薦", "加入書籤", "小說報錯", "關燈", "字體-", "字體+").
+                   - Các quảng cáo xen kẽ giữa các câu (ví dụ: thẻ script quảng cáo như `<script>loadAdv(5,0);</script>`).
+                   - Các bình luận bên lề của độc giả hoặc quảng cáo bằng chữ khác không liên quan đến cốt truyện chính.
+                3. **Dịch văn học**: Dịch nội dung chính vừa lọc được từ ngôn ngữ gốc ($srcTextVi) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, trôi chảy, đúng ngữ cảnh văn học phong cách truyện chữ. Sử dụng từ Hán-Việt mượt mà, xưng hô phù hợp bối cảnh nhân vật.
+                4. **Giữ nguyên định dạng**: Giữ nguyên cấu trúc các phân đoạn gốc (phân tách các đoạn văn bằng các dòng trống \n\n).
+                5. **Đầu ra nghiêm ngặt**: Tuyệt đối không thêm bất kỳ văn bản giới thiệu, chú thích ngoài lề hay lời thoại dẫn dắt nào của AI (như "Dưới đây là bản dịch...", "Đây là kết quả dịch:..."). Chỉ trả về kết quả dịch sạch theo đúng yêu cầu định dạng.
+                </rules>
+                
+                $fewShotVi
+            """.trimIndent()
         } else if (uiLanguage == "zh") {
-            systemInstruction = if (hasTitle) {
+            val titleRuleZh = if (hasTitle) {
+                "1. **翻译标题**: 将原始标题从源语言 ($srcTextZh) 自然且专业地翻译为目标语言 ($targetLang)。第一行必须且只能使用以下格式返回：\n   Title: [翻译后的标题]\n   翻译内容应该在标题下方，并用两个换行符 (\\n\\n) 分隔。"
+            } else {
+                "1. **不翻译标题**: 该文本是后续段落且不包含章节标题。绝对不要在开头添加 'Title: ...' 格式。"
+            }
+
+            val fewShotZh = if (hasTitle) {
                 """
-                    # 角色与目标
-                    您是一个智能翻译和内容提取助手。您的任务是接收原始标题和从网页提取的原始文本（其中可能包含导航菜单、广告、翻页按钮和无关评论等噪点），过滤噪点并进行高质量翻译。
-                    
-                    # 执行步骤
-                    1. **翻译标题**: 将原始标题从源语言 ($srcTextZh) 自然且专业地翻译为目标语言 ($targetLang)。
-                    2. **格式化标题**: 在第一行以以下确切格式返回翻译后的标题：
-                       Title: [翻译后的标题]
-                    3. **提取主体内容**: 识别原始文本中文章或章节的主体内容。完全过滤并移除所有噪点，包括广告、导航链接/按钮（如“下一章”、“目录”、“首页”）以及无关评论。
-                    4. **翻译主体内容**: 将过滤后的主体内容从源语言 ($srcTextZh) 自然、通顺且流畅地翻译为目标语言 ($targetLang)，并匹配目标语言的文学或新闻等专业文体特点。
-                    5. **保留结构**: 保留段落结构（使用空行 \n\n 明确分隔）。
-                    6. **无额外说明**: 在翻译后的标题下方返回翻译内容，用两个换行符 (\n\n) 分隔。不要包含任何介绍性或解释性文本（例如“以下是翻译内容...”）。仅返回格式为 'Title: ...' 的翻译标题 and 干净的主体翻译内容。$customPartZh
+                <few_shot_examples>
+                例如：
+                输入：
+                原始标题：第一章: 宗门
+                原始文本：
+                第一章: 宗门
+                [上一章] [目录] [下一章]
+                &emsp;&emsp;進屋一米不到，是一塊立著的大木板。<br />
+                <script>loadAdv(5,0);</script><br />
+                &emsp;&emsp;木板左側是空道。
+                
+                输出：
+                Title: Chapter 1: Sect
+                
+                Entering the room less than a meter away is a large standing wooden board.
+                
+                The left side of the wooden board is an empty path.
+                </few_shot_examples>
                 """.trimIndent()
             } else {
                 """
-                    # 角色与目标
-                    您是一个智能翻译和内容提取助手。您的任务是接收从网页提取的原始文本（其中可能包含导航菜单、广告、翻页按钮和无关评论等噪点），过滤噪点并进行高质量翻译。
-                    
-                    # 执行步骤
-                    1. **提取主体内容**: 识别原始文本中文章或章节的主体内容。完全过滤并移除所有噪点，包括广告、导航链接/按钮（如“下一章”、“目录”、“首页”）以及无关评论。
-                    2. **翻译主体内容**: 将过滤后的主体内容从源语言 ($srcTextZh) 自然、通顺且流畅地翻译为目标语言 ($targetLang)，并匹配目标语言的文学或新闻等专业文体特点。
-                    3. **保留结构**: 保留段落结构（使用空行 \n\n 明确分隔）。
-                    4. **无额外说明**: 不要包含任何介绍性或解释性文本（例如“以下是翻译内容...”）。仅返回干净的主体翻译内容。$customPartZh
+                <few_shot_examples>
+                例如：
+                输入：
+                &emsp;&emsp;進屋一米不到，是一塊立著的大木板。<br />
+                <script>loadAdv(5,0);</script><br />
+                &emsp;&emsp;木板左側是空道。
+                
+                输出：
+                Entering the room less than a meter away is a large standing wooden board.
+                
+                The left side of the wooden board is an empty path.
+                </few_shot_examples>
                 """.trimIndent()
             }
+
+            systemInstruction = """
+                <role>
+                您是一个智能网页噪点提取和文学翻译专家。
+                </role>
+                
+                <rules>
+                $titleRuleZh
+                2. **提取并净化核心内容**: 识别原始文本中的文章/章节主体。彻底清除所有噪点，包括：
+                   - 导航链接/翻页按钮（例如：“上一章”、“目录”、“下一章”、“投票推荐”、“加入书签”、“小说报错”、“关灯”、“字体-”、“字体+”）。
+                   - 广告代码或内嵌广告脚本（例如：`<script>loadAdv(5,0);</script>`）。
+                   - 读者无关评论或非主体文字。
+                3. **高质量翻译**: 将净化后的主体内容从源语言 ($srcTextZh) 翻译为目标语言 ($targetLang)，匹配目标文体的专业特点，使行文自然流畅。
+                4. **保留结构**: 保留段落结构（使用空行 \n\n 明确分隔）。
+                5. **无额外输出**: 绝对不要包含任何介绍性或解释性文本（例如“以下是翻译内容...”）。仅返回符合格式要求的翻译核心内容。
+                </rules>
+                
+                $fewShotZh
+            """.trimIndent()
         } else {
-            systemInstruction = if (hasTitle) {
+            val titleRuleEn = if (hasTitle) {
+                "1. **Translate Title**: Translate the original title from the source language ($srcTextEn) into the target language ($targetLang) naturally and professionally. The first line of the output MUST be in this exact format:\n   Title: [translated title]\n   The cleaned translation content must be placed below, separated by two newlines (\\n\\n)."
+            } else {
+                "1. **Do Not Translate Title**: This text block is a continuation and does not contain a chapter title. Do NOT add any 'Title: ...' prefix at the beginning."
+            }
+
+            val fewShotEn = if (hasTitle) {
                 """
-                    # ROLE & OBJECTIVE
-                    You are a professional translator and clean content extractor. Your task is to receive the original title and raw text extracted from a webpage (which may contain clutter such as navigation menus, advertisements, page buttons, and irrelevant comments), remove all clutter, and translate it into the target language.
-                    
-                    # EXECUTION STEPS
-                    1. **Translate Title**: Translate the original title from the source language ($srcTextEn) into the target language ($targetLang) naturally and professionally.
-                    2. **Format Title**: Return the translated title on the first line in this exact format:
-                       Title: [translated title]
-                    3. **Extract Main Content**: Identify the main content of the article or chapter in the raw text. Completely remove all clutter, including advertisements, navigation links/buttons (such as "Next Chapter", "Table of Contents", "Home"), and irrelevant comments.
-                    4. **Translate Main Content**: Translate the cleaned main content from the source language ($srcTextEn) into the target language ($targetLang) in a natural, smooth, and fluent manner, matching the professional literary or journalistic style of the target language.
-                    5. **Preserve Structure**: Preserve the paragraph structure (clearly separated by empty lines \n\n).
-                    6. **No Extra Annotations**: Return the translated content below the translated title, separated by two newlines (\n\n). Do NOT include any introductory or explanatory text. Only return the translated title formatted as 'Title: ...' and the clean translated main content.$customPartEn
+                <few_shot_examples>
+                Example:
+                Input:
+                Original Title: 第一章: 宗门
+                Raw Text:
+                第一章: 宗门
+                [上一章] [目录] [下一章]
+                &emsp;&emsp;進屋一米不到，是一塊立著的大木板。<br />
+                <script>loadAdv(5,0);</script><br />
+                &emsp;&emsp;木板左側是空道。
+                
+                Output:
+                Title: Chapter 1: The Sect
+                
+                Entering the room less than a meter away is a large standing wooden board.
+                
+                The left side of the wooden board is an empty path.
+                </few_shot_examples>
                 """.trimIndent()
             } else {
                 """
-                    # ROLE & OBJECTIVE
-                    You are a professional translator and clean content extractor. Your task is to receive raw text extracted from a webpage (which may contain clutter such as navigation menus, advertisements, page buttons, and irrelevant comments), remove all clutter, and translate it into the target language.
-                    
-                    # EXECUTION STEPS
-                    1. **Extract Main Content**: Identify the main content of the article or chapter in the raw text. Completely remove all clutter, including advertisements, navigation links/buttons (such as "Next Chapter", "Table of Contents", "Home"), and irrelevant comments.
-                    2. **Translate Main Content**: Translate the cleaned main content from the source language ($srcTextEn) into the target language ($targetLang) in a natural, smooth, and fluent manner, matching the professional literary or journalistic style of the target language.
-                    3. **Preserve Structure**: Preserve the paragraph structure (clearly separated by empty lines \n\n).
-                    4. **No Extra Annotations**: Do NOT include any introductory or explanatory text. Only return the clean translated main content.$customPartEn
+                <few_shot_examples>
+                Example:
+                Input:
+                &emsp;&emsp;進屋一米不到，是一塊立著的大木板。<br />
+                <script>loadAdv(5,0);</script><br />
+                &emsp;&emsp;木板左側是空道。
+                
+                Output:
+                Entering the room less than a meter away is a large standing wooden board.
+                
+                The left side of the wooden board is an empty path.
+                </few_shot_examples>
                 """.trimIndent()
             }
+
+            systemInstruction = """
+                <role>
+                You are a professional webpage content extractor and literary translator.
+                </role>
+                
+                <rules>
+                $titleRuleEn
+                2. **Extract and Clean Content**: Identify the main content of the article or chapter. Completely remove all webpage clutter, including:
+                   - Navigation links/buttons (e.g., "Next Chapter", "Table of Contents", "Home", "上一章", "目錄", "下一章", "投票推薦", "加入書籤", "小說報錯").
+                   - In-between advertisements and script tags (e.g., `<script>loadAdv(5,0);</script>`).
+                   - Irrelevant comments or non-main text.
+                3. **High-Quality Translation**: Translate the cleaned core content from the source language ($srcTextEn) into the target language ($targetLang) in a natural, smooth, and fluent manner, matching the target language's literary style.
+                4. **Preserve Paragraph Structure**: Keep the original paragraph structure (separate paragraphs by empty lines \n\n).
+                5. **Strict Output Formatting**: Do NOT include any introductory or explanatory text (such as "Here is the translation..."). Only return the clean translation matching the required format.
+                </rules>
+                
+                $fewShotEn
+            """.trimIndent()
         }
 
-        // Always put Disclaimer at the top of system instructions if available
+        // Apply Custom Rules and Disclaimer
+        var finalPrompt = systemInstruction
+        if (hasCustom) {
+            finalPrompt += "\n\n$customPart"
+        }
         if (hasDisclaimer) {
-            val titleText = if (uiLanguage == "vi") "LƯU Ý HỆ THỐNG (DISCLAIMER)"
-            else if (uiLanguage == "zh") "系统提示 (DISCLAIMER)"
-            else "SYSTEM WARNING / DISCLAIMER"
-            systemInstruction = "# $titleText\n${disclaimerText.trim()}\n\n$systemInstruction"
+            finalPrompt = "$disclaimerPart\n\n$finalPrompt"
         }
 
-        return systemInstruction
+        return finalPrompt
     }
 
     private suspend fun translateChunkRecursive(

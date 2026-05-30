@@ -1,7 +1,7 @@
 {
-  "versionCode": 17,
-  "versionName": "1.4.3",
+  "versionCode": 18,
+  "versionName": "1.4.4",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.4.3.apk",
-  "releaseNotes": "Cập nhật v1.4.3: Hiển thị đầy đủ hàng chờ dịch thuật nền phân biệt WAITING và TRANSLATING; Cơ chế dịch tuần tự ngăn chặn nghẽn API; Quản lý Cooldown API Key động tự động bắt lỗi HTTP 429 quota phút/ngày; Tự động chia nhỏ đệ quy các đoạn văn bị chặn an toàn (Safety Blocked)."
+  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.4.4.apk",
+  "releaseNotes": "Cập nhật v1.4.4: Tối ưu hóa chất lượng dịch thuật và xử lý rác trang web (Skillopt) sử dụng cấu trúc XML và Few-shot prompting, giúp tăng độ chính xác, loại bỏ menu quảng cáo triệt để và dịch văn học tự nhiên trôi chảy hơn."
 }
