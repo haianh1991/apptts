@@ -721,20 +721,35 @@ class GeminiManager {
                     }
 
                     if (isQuota) {
-                        val cooldownSec = getSecondsUntilDailyReset()
-                        val isDaily = errText.contains("day") || errText.contains("daily") || errText.contains("perday")
-                        val finalCooldownSec = if (isDaily) cooldownSec else 60L
-                        keyCooldowns[apiKey] = System.currentTimeMillis() + (finalCooldownSec * 1000L)
-                        
-                        val durationStr = if (isDaily) {
-                            val hr = finalCooldownSec / 3600
-                            val min = (finalCooldownSec % 3600) / 60
-                            "${hr} giờ ${min} phút (sẽ tự động reset lúc 15:00)"
+                        val retryRegex = Regex("Please retry in ([\\d.]+)\\s*s", RegexOption.IGNORE_CASE)
+                        val matchResult = retryRegex.find(errText)
+                        val exactCooldownMs = if (matchResult != null) {
+                            val seconds = matchResult.groupValues[1].toDoubleOrNull()
+                            if (seconds != null) {
+                                (seconds * 1000).toLong() + 2000L // 2 seconds safety buffer
+                            } else null
+                        } else null
+
+                        if (exactCooldownMs != null) {
+                            keyCooldowns[apiKey] = System.currentTimeMillis() + exactCooldownMs
+                            val durationSec = exactCooldownMs / 1000
+                            addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong $durationSec giây theo chỉ thị từ Google (HTTP 429).")
                         } else {
-                            "60 giây"
+                            val cooldownSec = getSecondsUntilDailyReset()
+                            val isDaily = errText.contains("day") || errText.contains("daily") || errText.contains("perday")
+                            val finalCooldownSec = if (isDaily) cooldownSec else 60L
+                            keyCooldowns[apiKey] = System.currentTimeMillis() + (finalCooldownSec * 1000L)
+                            
+                            val durationStr = if (isDaily) {
+                                val hr = finalCooldownSec / 3600
+                                val min = (finalCooldownSec % 3600) / 60
+                                "${hr} giờ ${min} phút (sẽ tự động reset lúc 15:00)"
+                            } else {
+                                "60 giây"
+                            }
+                            val quotaType = if (isDaily) "ngày (Per Day)" else "phút (Per Minute)"
+                            addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong $durationStr do vượt hạn ngạch $quotaType (HTTP 429).")
                         }
-                        val quotaType = if (isDaily) "ngày (Per Day)" else "phút (Per Minute)"
-                        addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong $durationStr do vượt hạn ngạch $quotaType (HTTP 429).")
                     } else if (isPermissionDenied || isNotFound || (isBadRequest && errText.contains("failed_precondition"))) {
                         keyCooldowns[apiKey] = System.currentTimeMillis() + (24 * 3600 * 1000L) // 24 hours
                         addStep("API Key số $keyNum ($keySnippet) bị vô hiệu hóa trong 24 giờ do lỗi xác thực/cấu hình (HTTP 403/404/Precondition).")
