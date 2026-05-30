@@ -369,6 +369,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 disclaimerText = settings.disclaimerText,
                 logSteps = logSteps,
                 title = title,
+                uiLanguage = settings.appDisplayLanguage,
+                maxWordCount = settings.chunkWordCount,
                 onStepAdded = { step ->
                     _foregroundTranslationStep.value = step
                     _foregroundTranslationSteps.value = _foregroundTranslationSteps.value + step
@@ -424,8 +426,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                             }
                         }
                     }
-                },
-                uiLanguage = settings.appDisplayLanguage
+                }
             )
 
             _isTranslating.value = false
@@ -605,6 +606,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             disclaimerText = settings.disclaimerText,
             logSteps = logSteps,
             title = title,
+            uiLanguage = settings.appDisplayLanguage,
+            maxWordCount = settings.chunkWordCount,
             onStepAdded = { step ->
                 _activeTranslations.value = _activeTranslations.value.map {
                     if (it.id == logId) it.copy(currentStep = step) else it
@@ -635,8 +638,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         }
                     }
                 }
-            },
-            uiLanguage = settings.appDisplayLanguage
+            }
         )
 
         result.onSuccess { translatedText ->
@@ -881,6 +883,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 disclaimerText = settings.disclaimerText,
                 logSteps = logSteps,
                 title = job.title,
+                uiLanguage = settings.appDisplayLanguage,
+                maxWordCount = settings.chunkWordCount,
                 onStepAdded = { step ->
                     _activeTranslations.value = _activeTranslations.value.map {
                         if (it.id == job.id) it.copy(currentStep = step) else it
@@ -911,8 +915,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                             }
                         }
                     }
-                },
-                uiLanguage = settings.appDisplayLanguage
+                }
             )
             
             result.onSuccess { translatedText ->

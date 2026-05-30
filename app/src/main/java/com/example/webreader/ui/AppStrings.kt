@@ -181,6 +181,8 @@ interface AppStrings {
     val disclaimerPosTop: String
     val disclaimerPosMiddle: String
     val disclaimerPosBottom: String
+    val settingsChunkWordCountTitle: String
+    val settingsChunkWordCountHelp: String
 }
 
 class ViAppStrings : AppStrings {
@@ -357,6 +359,8 @@ class ViAppStrings : AppStrings {
     override val disclaimerPosTop = "Đầu prompt"
     override val disclaimerPosMiddle = "Giữa prompt"
     override val disclaimerPosBottom = "Cuối prompt"
+    override val settingsChunkWordCountTitle = "Số từ tối đa mỗi phân đoạn (Chunk)"
+    override val settingsChunkWordCountHelp = "Giới hạn số từ cho mỗi phần dịch nhỏ (mặc định: 6000). Giá trị nhỏ hơn giúp tránh vượt quá độ dài ngữ cảnh và giảm lỗi."
 }
 
 class EnAppStrings : AppStrings {
@@ -533,6 +537,8 @@ class EnAppStrings : AppStrings {
     override val disclaimerPosTop = "Top"
     override val disclaimerPosMiddle = "Middle"
     override val disclaimerPosBottom = "Bottom"
+    override val settingsChunkWordCountTitle = "Max words per segment (Chunk)"
+    override val settingsChunkWordCountHelp = "Word limit for each translated section (default: 6000). Smaller values help avoid context length issues and reduce errors."
 }
 
 class ZhAppStrings : AppStrings {
@@ -709,6 +715,8 @@ class ZhAppStrings : AppStrings {
     override val disclaimerPosTop = "Prompt 顶部"
     override val disclaimerPosMiddle = "Prompt 中部"
     override val disclaimerPosBottom = "Prompt 底部"
+    override val settingsChunkWordCountTitle = "每个分段的最大字数 (Chunk)"
+    override val settingsChunkWordCountHelp = "每个翻译分段的字数限制（默认：6000）。较小的值有助于避免超出上下文长度并减少错误。"
 }
 
 val LocalAppStrings = staticCompositionLocalOf<AppStrings> {

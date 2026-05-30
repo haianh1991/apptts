@@ -127,6 +127,7 @@ fun SettingsScreen(
     var customInstructions by remember { mutableStateOf(settings.customInstructions) }
 
     var disclaimerText by remember { mutableStateOf(settings.disclaimerText) }
+    var chunkWordCount by remember { mutableStateOf(settings.chunkWordCount.toString()) }
 
     androidx.compose.runtime.LaunchedEffect(displayLang) {
         val currentText = disclaimerText.trim()
@@ -663,6 +664,29 @@ fun SettingsScreen(
                             Text(appStrings.btnRestoreDefault, style = MaterialTheme.typography.labelMedium)
                         }
                     }
+
+                    OutlinedTextField(
+                        value = chunkWordCount,
+                        onValueChange = { newValue ->
+                            if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
+                                chunkWordCount = newValue
+                            }
+                        },
+                        label = { Text(appStrings.settingsChunkWordCountTitle) },
+                        placeholder = { Text("6000") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        ),
+                        textStyle = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = appStrings.settingsChunkWordCountHelp,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
 
@@ -987,6 +1011,7 @@ fun SettingsScreen(
                     settings.targetLanguage = targetLanguage
                     settings.customInstructions = customInstructions.trim()
                     settings.disclaimerText = disclaimerText.trim()
+                    settings.chunkWordCount = chunkWordCount.toIntOrNull() ?: 6000
                     viewModel.updateTtsSettings(ttsSpeed, ttsPitch, selectedEngine)
                     viewModel.checkAppUpdate()
                     onBackClick()

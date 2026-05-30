@@ -72,6 +72,10 @@ class SettingsRepository(context: Context) {
     var appDisplayLanguage: String
         get() = prefs.getString("app_display_language", "vi") ?: "vi"
         set(value) = prefs.edit().putString("app_display_language", value).apply()
+
+    var chunkWordCount: Int
+        get() = prefs.getInt("chunk_word_count", 6000)
+        set(value) = prefs.edit().putInt("chunk_word_count", value).apply()
 }
 
 
