@@ -91,16 +91,37 @@ class GeminiManager {
 
     private fun isSafetyError(e: Throwable): Boolean {
         val errText = getDetailedErrorMessage(e).lowercase()
-        val keywords = listOf(
+        
+        // 1. Loại trừ các lỗi hệ thống và HTTP đã biết
+        val isQuota = errText.contains("429") || errText.contains("resource_exhausted") || errText.contains("quota")
+        val isPermissionDenied = errText.contains("403") || errText.contains("permission_denied") || errText.contains("permission denied") || errText.contains("api key")
+        val isNotFound = errText.contains("404") || errText.contains("not_found") || errText.contains("not found")
+        val isServerErr = errText.contains("500") || errText.contains("503") || errText.contains("504") || errText.contains("internal") || errText.contains("unavailable") || errText.contains("high demand")
+        val isBadRequest = errText.contains("400") || errText.contains("invalid_argument") || errText.contains("failed_precondition")
+        
+        if (isQuota || isPermissionDenied || isNotFound || isServerErr || isBadRequest) {
+            return false
+        }
+        
+        // 2. Kiểm tra từ khóa an toàn thực sự
+        val safetyKeywords = listOf(
             "safety",
             "blocked",
             "prohibited",
             "finishreason",
-            "serializationexception",
-            "missingfieldexception",
             "provided content"
         )
-        return keywords.any { errText.contains(it) }
+        val hasSafetyKeyword = safetyKeywords.any { errText.contains(it) }
+        if (hasSafetyKeyword) return true
+        
+        // 3. Xử lý lỗi phân tích cú pháp JSON của SDK
+        val isSerialization = errText.contains("serializationexception") || errText.contains("missingfieldexception")
+        if (isSerialization) {
+            // Chỉ coi là lỗi an toàn nếu có đề cập đến các từ khóa an toàn/nội dung bị chặn
+            return errText.contains("safety") || errText.contains("block") || errText.contains("content")
+        }
+        
+        return false
     }
 
     private fun isNetworkError(e: Throwable): Boolean {
@@ -636,7 +657,7 @@ class GeminiManager {
                 val isPermissionDenied = errText.contains("403") || errText.contains("permission_denied") || errText.contains("permission denied") || errText.contains("api key")
                 val isNotFound = errText.contains("404") || errText.contains("not_found") || errText.contains("not found")
                 val isBadRequest = errText.contains("400") || errText.contains("invalid_argument") || errText.contains("failed_precondition") || errText.contains("failed precondition")
-                val isServerErr = errText.contains("500") || errText.contains("503") || errText.contains("504") || errText.contains("internal") || errText.contains("unavailable")
+                val isServerErr = errText.contains("500") || errText.contains("503") || errText.contains("504") || errText.contains("internal") || errText.contains("unavailable") || errText.contains("high demand")
 
                 if (isNetwork) {
                     val errLabel = "Lỗi kết nối mạng (Internet/Timeout)"
@@ -711,8 +732,22 @@ class GeminiManager {
                         break // Break out of key attempt loop
                     }
                 } else {
+                    // 1. Phân tích giới hạn (limit) từ phản hồi để phân loại RPM/RPD
+                    val limitRegex = Regex("limit:\\s*(\\d+)", RegexOption.IGNORE_CASE)
+                    val limitMatch = limitRegex.find(errText)
+                    val limitValue = limitMatch?.groupValues?.get(1)?.toIntOrNull()
+
+                    val isDailyQuota = isQuota && (
+                        errText.contains("daily") || 
+                        errText.contains("per_day") || 
+                        errText.contains("perday") || 
+                        errText.contains("free_tier_requests_per_day") ||
+                        (limitValue != null && limitValue == 20)
+                    )
+                    
                     val errLabel = when {
-                        isQuota -> "Lỗi Hạn ngạch (Quota Exceeded)"
+                        isDailyQuota -> "Lỗi Hạn ngạch Ngày (RPD Quota Exceeded)"
+                        isQuota -> "Lỗi Hạn ngạch Phút (RPM Quota Exceeded)"
                         isPermissionDenied -> "Lỗi Xác thực (Permission Denied)"
                         isNotFound -> "Mô hình Không tìm thấy (Not Found)"
                         isBadRequest -> "Yêu cầu Không hợp lệ (Bad Request/Precondition)"
@@ -720,45 +755,44 @@ class GeminiManager {
                         else -> "Lỗi kỹ thuật"
                     }
 
+                    // 2. Tính toán thời gian chờ thử lại (Safety/Cooldown Timer)
                     if (isQuota) {
-                        val isDaily = errText.contains("day") || errText.contains("daily") || errText.contains("perday") || (errText.contains("free_tier_requests") && !errText.contains("per_minute") && !errText.contains("per_min"))
-                        if (isDaily) {
+                        val retryRegex = Regex("Please retry in ([\\d.]+)\\s*s", RegexOption.IGNORE_CASE)
+                        val matchResult = retryRegex.find(errText)
+                        val exactCooldownMs = if (matchResult != null) {
+                            val seconds = matchResult.groupValues[1].toDoubleOrNull()
+                            if (seconds != null) {
+                                (seconds * 1000).toLong() + 2000L // 2 giây buffer
+                            } else null
+                        } else null
+
+                        if (exactCooldownMs != null) {
+                            keyCooldowns[apiKey] = System.currentTimeMillis() + exactCooldownMs
+                            val durationSec = exactCooldownMs / 1000
+                            addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong $durationSec giây (bộ đếm an toàn chờ reset hạn ngạch).")
+                        } else if (isDailyQuota) {
                             val cooldownSec = getSecondsUntilDailyReset()
                             keyCooldowns[apiKey] = System.currentTimeMillis() + (cooldownSec * 1000L)
                             val hr = cooldownSec / 3600
                             val min = (cooldownSec % 3600) / 60
                             val durationStr = "${hr} giờ ${min} phút (sẽ tự động reset lúc 15:00)"
-                            addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong $durationStr do vượt hạn ngạch ngày (Per Day) (HTTP 429).")
+                            addStep("API Key số $keyNum ($keySnippet) bị khóa đến 15:00 chiều mai do hết hạn ngạch ngày.")
                         } else {
-                            val retryRegex = Regex("Please retry in ([\\d.]+)\\s*s", RegexOption.IGNORE_CASE)
-                            val matchResult = retryRegex.find(errText)
-                            val exactCooldownMs = if (matchResult != null) {
-                                val seconds = matchResult.groupValues[1].toDoubleOrNull()
-                                if (seconds != null) {
-                                    (seconds * 1000).toLong() + 2000L // 2 seconds safety buffer
-                                } else null
-                            } else null
-
-                            if (exactCooldownMs != null) {
-                                keyCooldowns[apiKey] = System.currentTimeMillis() + exactCooldownMs
-                                val durationSec = exactCooldownMs / 1000
-                                addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong $durationSec giây theo chỉ thị từ Google (HTTP 429).")
-                            } else {
-                                keyCooldowns[apiKey] = System.currentTimeMillis() + 60000L
-                                addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong 60 giây do vượt hạn ngạch phút (Per Minute) (HTTP 429).")
-                            }
+                            keyCooldowns[apiKey] = System.currentTimeMillis() + 60000L
+                            addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong 60 giây do vượt hạn ngạch phút (RPM).")
                         }
                     } else if (isPermissionDenied || isNotFound || (isBadRequest && errText.contains("failed_precondition"))) {
-                        keyCooldowns[apiKey] = System.currentTimeMillis() + (24 * 3600 * 1000L) // 24 hours
-                        addStep("API Key số $keyNum ($keySnippet) bị vô hiệu hóa trong 24 giờ do lỗi xác thực/cấu hình (HTTP 403/404/Precondition).")
+                        keyCooldowns[apiKey] = System.currentTimeMillis() + (24 * 3600 * 1000L) // 24 giờ
+                        addStep("API Key số $keyNum ($keySnippet) bị vô hiệu hóa trong 24 giờ do lỗi cấu hình/xác thực.")
                     } else if (isServerErr) {
-                        keyCooldowns[apiKey] = System.currentTimeMillis() + (15 * 1000L) // 15 seconds
-                        addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong 15 giây do lỗi máy chủ Google (HTTP 500/503/504).")
+                        keyCooldowns[apiKey] = System.currentTimeMillis() + (15 * 1000L) // 15 giây
+                        addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong 15 giây do lỗi máy chủ Google.")
                     } else {
-                        keyCooldowns[apiKey] = System.currentTimeMillis() + (5 * 1000L) // 5 seconds
+                        keyCooldowns[apiKey] = System.currentTimeMillis() + (5 * 1000L)
                     }
 
-                    addStep("Thất bại $chunkInfo với API Key số $keyNum ($keySnippet) [$errLabel]. Chi tiết: $detailedErr")
+                    // 3. Ghi nhận chi tiết phản hồi API vào nhật ký
+                    addStep("Thất bại $chunkInfo với API Key số $keyNum ($keySnippet) [$errLabel]. Chi tiết phản hồi API:\n$detailedErr")
                     chunkErrors.add("[$keySnippet] [$errLabel]: $detailedErr")
                 }
             }

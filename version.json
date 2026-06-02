@@ -1,7 +1,7 @@
 {
-  "versionCode": 20,
-  "versionName": "1.4.6",
+  "versionCode": 21,
+  "versionName": "1.4.7",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.4.6.apk",
-  "releaseNotes": "Cập nhật v1.4.6: Nâng cấp lưu vị trí đoạn văn đang đọc dở (khôi phục và nghe tiếp đúng đoạn khi mở lại app); tự động lưu bản dịch ở chế độ Đọc ngay vào danh sách Đã dịch sau khi hoàn tất dịch toàn bộ."
+  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.4.7.apk",
+  "releaseNotes": "Cập nhật v1.4.7: Sửa lỗi hiển thị và phân loại sai mã lỗi API (503 UNAVAILABLE thành Lỗi Máy chủ) và khắc phục lỗi khóa nhầm API key do hiểu sai hạn ngạch phút thành hạn ngạch ngày."
 }
