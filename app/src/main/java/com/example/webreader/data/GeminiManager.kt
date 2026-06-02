@@ -476,13 +476,23 @@ class GeminiManager {
 
         var success = false
         val now = System.currentTimeMillis()
-        val activeKeys = apiKeys.filter { (keyCooldowns[it] ?: 0L) <= now }
+        val activeKeys = apiKeys.filter { apiKey ->
+            val modelCooldown = keyCooldowns["$apiKey:$modelName"] ?: 0L
+            modelCooldown <= now
+        }
         val currentKeys = if (activeKeys.isNotEmpty()) activeKeys else apiKeys
         val keysCount = currentKeys.size
         val chunkErrors = mutableListOf<String>()
 
+        val lastSuccessfulKey = apiKeys.getOrNull(currentKeyIndexRef[0])
+        val startIndexInCurrentKeys = if (lastSuccessfulKey != null) {
+            currentKeys.indexOf(lastSuccessfulKey).coerceAtLeast(0)
+        } else {
+            0
+        }
+
         for (attempt in 0 until keysCount) {
-            val keyIdx = (currentKeyIndexRef[0] + attempt) % keysCount
+            val keyIdx = (startIndexInCurrentKeys + attempt) % keysCount
             val apiKey = currentKeys[keyIdx]
             val originalIndex = apiKeys.indexOf(apiKey)
             val keyNum = originalIndex + 1
@@ -637,7 +647,7 @@ class GeminiManager {
                 if (translatedText.isNotEmpty()) {
                     node.translatedText = translatedText
                     success = true
-                    currentKeyIndexRef[0] = keyIdx
+                    currentKeyIndexRef[0] = originalIndex
                     val successMsg = if (depth > 0) {
                         "Dịch thành công phần con $chunkInfo với API Key số $keyNum ($keySnippet)."
                     } else {
@@ -766,29 +776,26 @@ class GeminiManager {
                             } else null
                         } else null
 
-                        if (exactCooldownMs != null) {
-                            keyCooldowns[apiKey] = System.currentTimeMillis() + exactCooldownMs
-                            val durationSec = exactCooldownMs / 1000
-                            addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong $durationSec giây (bộ đếm an toàn chờ reset hạn ngạch).")
-                        } else if (isDailyQuota) {
+                        val modelKey = "$apiKey:$modelName"
+
+                        if (isDailyQuota) {
                             val cooldownSec = getSecondsUntilDailyReset()
-                            keyCooldowns[apiKey] = System.currentTimeMillis() + (cooldownSec * 1000L)
+                            keyCooldowns[modelKey] = System.currentTimeMillis() + (cooldownSec * 1000L)
                             val hr = cooldownSec / 3600
                             val min = (cooldownSec % 3600) / 60
-                            val durationStr = "${hr} giờ ${min} phút (sẽ tự động reset lúc 15:00)"
-                            addStep("API Key số $keyNum ($keySnippet) bị khóa đến 15:00 chiều mai do hết hạn ngạch ngày.")
+                            val durationStr = if (hr > 0) "${hr} giờ ${min} phút" else "${min} phút"
+                            addStep("API Key số $keyNum ($keySnippet) bị khóa đối với mô hình $modelName cho đến khi tự động reset lúc 15:00 (còn khoảng $durationStr) do hết hạn ngạch ngày (RPD).")
+                        } else if (exactCooldownMs != null) {
+                            keyCooldowns[modelKey] = System.currentTimeMillis() + exactCooldownMs
+                            val durationSec = exactCooldownMs / 1000
+                            addStep("API Key số $keyNum ($keySnippet) bị tạm khóa đối với mô hình $modelName trong $durationSec giây (bộ đếm an toàn chờ reset hạn ngạch phút - RPM).")
                         } else {
-                            keyCooldowns[apiKey] = System.currentTimeMillis() + 60000L
-                            addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong 60 giây do vượt hạn ngạch phút (RPM).")
+                            keyCooldowns[modelKey] = System.currentTimeMillis() + 60000L
+                            addStep("API Key số $keyNum ($keySnippet) bị tạm khóa đối với mô hình $modelName trong 60 giây do vượt hạn ngạch phút (RPM).")
                         }
-                    } else if (isPermissionDenied || isNotFound || (isBadRequest && errText.contains("failed_precondition"))) {
-                        keyCooldowns[apiKey] = System.currentTimeMillis() + (24 * 3600 * 1000L) // 24 giờ
-                        addStep("API Key số $keyNum ($keySnippet) bị vô hiệu hóa trong 24 giờ do lỗi cấu hình/xác thực.")
-                    } else if (isServerErr) {
-                        keyCooldowns[apiKey] = System.currentTimeMillis() + (15 * 1000L) // 15 giây
-                        addStep("API Key số $keyNum ($keySnippet) bị tạm khóa trong 15 giây do lỗi máy chủ Google.")
                     } else {
-                        keyCooldowns[apiKey] = System.currentTimeMillis() + (5 * 1000L)
+                        // Không thiết lập bất kỳ Cooldown nào đối với lỗi xác thực (Auth/Permission) và lỗi máy chủ (Server Error).
+                        // Key này vẫn được giữ nguyên trạng thái hoạt động cho các phần/yêu cầu dịch sau.
                     }
 
                     // 3. Ghi nhận chi tiết phản hồi API vào nhật ký

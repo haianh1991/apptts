@@ -221,23 +221,24 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 val text = _paragraphs.value[nextIndex]
                 ttsManager.speak(text, nextIndex, settings.ttsSpeed, settings.ttsPitch)
             } else {
-                if (_isTranslating.value) {
-                    // Still translating! Just update the current index to the completed index so we know we finished it,
-                    // and wait for more paragraphs.
+                val qList = _queue.value
+                val qIndex = _currentQueueItemIndex.value
+                val currentItemId = if (qIndex in qList.indices) qList[qIndex].id else ""
+                val isItemTranslating = _activeTranslations.value.any { it.itemId == currentItemId && it.status != TranslationStatus.FAILED }
+
+                if (_isTranslating.value || isItemTranslating) {
+                    // Đang dịch (foreground hoặc background stream), giữ trạng thái chờ đoạn văn mới
                     _currentParagraphIndex.value = completedIndex
-                    // We don't change _isPlaying, so it remains active and waiting.
                 } else {
-                    // Finished paragraphs of the current item! Check if there's a next queue item
-                    val qList = _queue.value
-                    val qIndex = _currentQueueItemIndex.value
-                    if (qIndex != -1 && qIndex + 1 < qList.size) {
-                        val nextQIndex = qIndex + 1
+                    // Đã hết bài viết thực sự, chuyển sang bài tiếp theo
+                    val nextQIndex = qIndex + 1
+                    if (qIndex != -1 && nextQIndex < qList.size) {
                         _currentQueueItemIndex.value = nextQIndex
                         val nextItem = qList[nextQIndex]
                         updateLastReadQueueItemId(nextItem.id)
                         _paragraphs.value = nextItem.paragraphs
                         _title.value = nextItem.title
-                        _currentParagraphIndex.value = -2 // Announces title first
+                        _currentParagraphIndex.value = -2 // Đọc tiêu đề trước
                         
                         val announceText = "Bắt đầu đọc bài viết: ${nextItem.title}"
                         ttsManager.speak(announceText, -2, settings.ttsSpeed, settings.ttsPitch)
@@ -561,8 +562,11 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
 
         val logId = java.util.UUID.randomUUID().toString()
+        val newItemId = java.util.UUID.randomUUID().toString()
+        
         val job = ActiveTranslation(
             id = logId,
+            itemId = newItemId,
             title = title,
             url = url,
             text = text,
@@ -577,9 +581,25 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             android.widget.Toast.LENGTH_SHORT
         ).show()
 
+        // Tạo bài viết rỗng trong hàng chờ ngay lập tức để người dùng có thể thấy và click vào nghe
+        val initialItem = QueueItem(
+            id = newItemId,
+            title = title,
+            url = url,
+            paragraphs = listOf("--- [Đang dịch thuật, vui lòng chờ...] ---"),
+            folderId = folderId
+        )
+        viewModelScope.launch(Dispatchers.Main) {
+            val allItems = _queue.value.toMutableList().apply { add(initialItem) }
+            val sortedItems = sortQueueItems(allItems, _folders.value)
+            _queue.value = sortedItems
+            queueRepository.saveQueueData(_folders.value, sortedItems)
+        }
+
         val logSteps = mutableListOf("Đã đưa bài viết vào hàng đợi dịch nền tuần tự (xếp hàng)...")
         val jobRequest = TranslationJobRequest(
             id = logId,
+            itemId = newItemId,
             text = text,
             title = title,
             url = url,
@@ -592,6 +612,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     private suspend fun processTranslationRequest(request: TranslationJobRequest) {
         val logId = request.id
+        val newItemId = request.itemId
         val text = request.text
         val title = request.title
         val url = request.url
@@ -652,11 +673,40 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             },
             onContentUpdated = { totalText ->
                 viewModelScope.launch(Dispatchers.Main) {
-                    val (extractedTitle, _) = parseTitleAndContent(totalText, title)
-                    if (extractedTitle != currentTitle) {
-                        currentTitle = extractedTitle
-                        _activeTranslations.value = _activeTranslations.value.map {
-                            if (it.id == logId) it.copy(title = extractedTitle) else it
+                    val (extractedTitle, contentText) = parseTitleAndContent(totalText, title)
+                    currentTitle = extractedTitle
+                    
+                    _activeTranslations.value = _activeTranslations.value.map {
+                        if (it.id == logId) it.copy(title = extractedTitle) else it
+                    }
+
+                    val rawParagraphs = contentText.split("\n\n")
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                    val displayParagraphs = if (rawParagraphs.isEmpty()) listOf("--- [Đang dịch thuật, vui lòng chờ...] ---") else rawParagraphs
+
+                    // Cập nhật động bài viết trong hàng chờ (CSDL và UI list)
+                    val allItems = _queue.value.map { item ->
+                        if (item.id == newItemId) {
+                            item.copy(title = extractedTitle, paragraphs = displayParagraphs)
+                        } else item
+                    }
+                    _queue.value = allItems
+                    queueRepository.saveQueueData(_folders.value, allItems)
+
+                    // Đồng bộ với trình phát đọc nếu người dùng đang nghe bài này
+                    val currentIndex = _currentQueueItemIndex.value
+                    if (currentIndex != -1 && currentIndex < allItems.size && allItems[currentIndex].id == newItemId) {
+                        if (_paragraphs.value != displayParagraphs) {
+                            _paragraphs.value = displayParagraphs
+                            
+                            // Nếu trình phát đang chạy, rảnh rỗi và có đoạn mới vừa dịch xong
+                            val currentParaIdx = _currentParagraphIndex.value
+                            val nextParaIdx = if (currentParaIdx == -2) 0 else currentParaIdx + 1
+                            if (_isPlaying.value && !ttsManager.isSpeaking() && nextParaIdx in displayParagraphs.indices) {
+                                _currentParagraphIndex.value = nextParaIdx
+                                ttsManager.speak(displayParagraphs[nextParaIdx], nextParaIdx, settings.ttsSpeed, settings.ttsPitch)
+                            }
                         }
                     }
                 }
@@ -674,37 +724,23 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             _activeTranslations.value = _activeTranslations.value.filter { it.id != logId }
 
             if (rawParagraphs.isNotEmpty()) {
-                val newItem = QueueItem(
-                    id = java.util.UUID.randomUUID().toString(),
-                    title = currentTitle,
-                    url = url,
-                    paragraphs = rawParagraphs,
-                    folderId = folderId
-                )
-                
                 viewModelScope.launch(Dispatchers.Main) {
-                    val allItems = _queue.value.toMutableList().apply { add(newItem) }
-                    val sortedItems = sortQueueItems(allItems, _folders.value)
-                    _queue.value = sortedItems
-                    queueRepository.saveQueueData(_folders.value, sortedItems)
+                    val allItems = _queue.value.map { item ->
+                        if (item.id == newItemId) {
+                            item.copy(title = currentTitle, paragraphs = rawParagraphs)
+                        } else item
+                    }
+                    _queue.value = allItems
+                    queueRepository.saveQueueData(_folders.value, allItems)
                     
-                    if (_currentQueueItemIndex.value == -1 && _paragraphs.value.isEmpty()) {
-                        val qList = _queue.value
-                        val newIndex = qList.indexOfFirst { it.id == newItem.id }
-                        if (newIndex != -1) {
-                            val item = qList[newIndex]
-                            _currentQueueItemIndex.value = newIndex
-                            updateLastReadQueueItemId(item.id)
-                            _paragraphs.value = item.paragraphs
-                            _title.value = item.title
-                            _currentParagraphIndex.value = -1
-                            _isPlaying.value = false
-                        }
+                    val currentIndex = _currentQueueItemIndex.value
+                    if (currentIndex != -1 && currentIndex < allItems.size && allItems[currentIndex].id == newItemId) {
+                        _paragraphs.value = rawParagraphs
                     }
                     
                     android.widget.Toast.makeText(
                         getApplication(),
-                        "Đã thêm vào hàng chờ: $currentTitle",
+                        "Đã dịch xong và lưu vào hàng chờ: $currentTitle",
                         android.widget.Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -726,10 +762,21 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 _activeTranslations.value = _activeTranslations.value.map {
                     if (it.id == logId) it.copy(status = TranslationStatus.FAILED, errorMessage = "Không phân tích được đoạn văn") else it
                 }
+                
+                // Rollback lại văn bản gốc tránh bài viết trống
+                val originalParagraphs = text.split("\n\n").map { it.trim() }.filter { it.isNotEmpty() }
                 viewModelScope.launch(Dispatchers.Main) {
+                    val allItems = _queue.value.map { item ->
+                        if (item.id == newItemId) {
+                            item.copy(paragraphs = originalParagraphs)
+                        } else item
+                    }
+                    _queue.value = allItems
+                    queueRepository.saveQueueData(_folders.value, allItems)
+                    
                     android.widget.Toast.makeText(
                         getApplication(),
-                        "Lỗi: Không phân tích được đoạn văn cho bài viết: $currentTitle",
+                        "Lỗi: Không phân tích được đoạn văn dịch, sử dụng bản gốc.",
                         android.widget.Toast.LENGTH_LONG
                     ).show()
                 }
@@ -750,16 +797,22 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             }
         }.onFailure { exception ->
             val errMsg = exception.message ?: exception.localizedMessage ?: "Lỗi không xác định"
-            _activeTranslations.value = _activeTranslations.value.map {
-                if (it.id == logId) it.copy(
-                    status = TranslationStatus.FAILED,
-                    errorMessage = errMsg
-                ) else it
-            }
+            _activeTranslations.value = _activeTranslations.value.filter { it.id != logId }
+            
+            // Rollback lại văn bản gốc tránh bài viết trống
+            val originalParagraphs = text.split("\n\n").map { it.trim() }.filter { it.isNotEmpty() }
             viewModelScope.launch(Dispatchers.Main) {
+                val allItems = _queue.value.map { item ->
+                    if (item.id == newItemId) {
+                        item.copy(paragraphs = originalParagraphs)
+                    } else item
+                }
+                _queue.value = allItems
+                queueRepository.saveQueueData(_folders.value, allItems)
+                
                 android.widget.Toast.makeText(
                     getApplication(),
-                    "Lỗi dịch thuật bài viết \"$currentTitle\":\n$errMsg",
+                    "Lỗi dịch thuật bài viết \"$currentTitle\", sử dụng bản gốc.",
                     android.widget.Toast.LENGTH_LONG
                 ).show()
             }
@@ -877,6 +930,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
         
         val logId = job.id
+        val targetItemId = job.itemId ?: java.util.UUID.randomUUID().toString()
         viewModelScope.launch {
             val logSteps = mutableListOf("Bắt đầu thử lại dịch thuật (gộp tiêu đề và nội dung)...")
             var currentTitle = job.title
@@ -929,11 +983,58 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 },
                 onContentUpdated = { totalText ->
                     viewModelScope.launch(Dispatchers.Main) {
-                        val (extractedTitle, _) = parseTitleAndContent(totalText, job.title)
-                        if (extractedTitle != currentTitle) {
-                            currentTitle = extractedTitle
-                            _activeTranslations.value = _activeTranslations.value.map {
-                                if (it.id == job.id) it.copy(title = extractedTitle) else it
+                        val (extractedTitle, contentText) = parseTitleAndContent(totalText, job.title)
+                        currentTitle = extractedTitle
+                        _activeTranslations.value = _activeTranslations.value.map {
+                            if (it.id == job.id) it.copy(title = extractedTitle) else it
+                        }
+                        
+                        val rawParagraphs = contentText.split("\n\n")
+                            .map { it.trim() }
+                            .filter { it.isNotEmpty() }
+                        val displayParagraphs = if (rawParagraphs.isEmpty()) listOf("--- [Đang dịch thuật, vui lòng chờ...] ---") else rawParagraphs
+
+                        // Cập nhật động bài viết trong hàng chờ (CSDL và UI list)
+                        var itemFound = false
+                        val allItems = _queue.value.map { item ->
+                            if (item.id == targetItemId) {
+                                itemFound = true
+                                item.copy(title = extractedTitle, paragraphs = displayParagraphs)
+                            } else item
+                        }.toMutableList()
+
+                        if (!itemFound && job.itemId == null) {
+                            val currentItem = _currentQueueItemIndex.value.let { idx ->
+                                if (idx in _queue.value.indices) _queue.value[idx] else null
+                            }
+                            val folderId = currentItem?.folderId
+                            val newItem = QueueItem(
+                                id = targetItemId,
+                                title = extractedTitle,
+                                url = job.url,
+                                paragraphs = displayParagraphs,
+                                folderId = folderId
+                            )
+                            allItems.add(newItem)
+                        }
+
+                        val sortedItems = sortQueueItems(allItems, _folders.value)
+                        _queue.value = sortedItems
+                        queueRepository.saveQueueData(_folders.value, sortedItems)
+
+                        // Đồng bộ với trình phát đọc nếu người dùng đang nghe bài này
+                        val currentIndex = _currentQueueItemIndex.value
+                        if (currentIndex != -1 && currentIndex < sortedItems.size && sortedItems[currentIndex].id == targetItemId) {
+                            if (_paragraphs.value != displayParagraphs) {
+                                _paragraphs.value = displayParagraphs
+                                
+                                // Nếu trình phát đang chạy, rảnh rỗi và có đoạn mới vừa dịch xong
+                                val currentParaIdx = _currentParagraphIndex.value
+                                val nextParaIdx = if (currentParaIdx == -2) 0 else currentParaIdx + 1
+                                if (_isPlaying.value && !ttsManager.isSpeaking() && nextParaIdx in displayParagraphs.indices) {
+                                    _currentParagraphIndex.value = nextParaIdx
+                                    ttsManager.speak(displayParagraphs[nextParaIdx], nextParaIdx, settings.ttsSpeed, settings.ttsPitch)
+                                }
                             }
                         }
                     }
@@ -951,42 +1052,45 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 if (rawParagraphs.isNotEmpty()) {
                     _activeTranslations.value = _activeTranslations.value.filter { it.id != job.id }
                     
-                    val currentItem = _currentQueueItemIndex.value.let { idx ->
-                        if (idx in _queue.value.indices) _queue.value[idx] else null
-                    }
-                    val folderId = currentItem?.folderId
-
-                    val newItem = QueueItem(
-                        id = java.util.UUID.randomUUID().toString(),
-                        title = currentTitle,
-                        url = job.url,
-                        paragraphs = rawParagraphs,
-                        folderId = folderId
-                    )
-                    val allItems = _queue.value.toMutableList().apply { add(newItem) }
-                    val sortedItems = sortQueueItems(allItems, _folders.value)
-                    _queue.value = sortedItems
-                    queueRepository.saveQueueData(_folders.value, sortedItems)
-                    
-                    if (_currentQueueItemIndex.value == -1 && _paragraphs.value.isEmpty()) {
-                        val qList = _queue.value
-                        val newIndex = qList.indexOfFirst { it.id == newItem.id }
-                        if (newIndex != -1) {
-                            val item = qList[newIndex]
-                            _currentQueueItemIndex.value = newIndex
-                            updateLastReadQueueItemId(item.id)
-                            _paragraphs.value = item.paragraphs
-                            _title.value = item.title
-                            _currentParagraphIndex.value = -1
-                            _isPlaying.value = false
+                    viewModelScope.launch(Dispatchers.Main) {
+                        var itemFound = false
+                        val allItems = _queue.value.map { item ->
+                            if (item.id == targetItemId) {
+                                itemFound = true
+                                item.copy(title = currentTitle, paragraphs = rawParagraphs)
+                            } else item
+                        }.toMutableList()
+                        
+                        if (!itemFound) {
+                            val currentItem = _currentQueueItemIndex.value.let { idx ->
+                                if (idx in _queue.value.indices) _queue.value[idx] else null
+                            }
+                            val folderId = currentItem?.folderId
+                            val newItem = QueueItem(
+                                id = targetItemId,
+                                title = currentTitle,
+                                url = job.url,
+                                paragraphs = rawParagraphs,
+                                folderId = folderId
+                            )
+                            allItems.add(newItem)
                         }
+                        
+                        val sortedItems = sortQueueItems(allItems, _folders.value)
+                        _queue.value = sortedItems
+                        queueRepository.saveQueueData(_folders.value, sortedItems)
+                        
+                        val currentIndex = sortedItems.indexOfFirst { it.id == targetItemId }
+                        if (currentIndex != -1 && currentIndex == _currentQueueItemIndex.value) {
+                            _paragraphs.value = rawParagraphs
+                        }
+                        
+                        android.widget.Toast.makeText(
+                            getApplication(),
+                            "Đã dịch xong và lưu vào hàng chờ: $currentTitle",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
                     }
-                    
-                    android.widget.Toast.makeText(
-                        getApplication(),
-                        "Đã thêm vào hàng chờ: $currentTitle",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
  
                     val finalLog = TransactionLog(
                         id = logId,
@@ -1006,6 +1110,24 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         if (it.id == job.id) it.copy(status = TranslationStatus.FAILED, errorMessage = "Không phân tích được đoạn văn") else it
                     }
  
+                    // Rollback lại văn bản gốc tránh bài viết trống
+                    val originalParagraphs = job.text.split("\n\n").map { it.trim() }.filter { it.isNotEmpty() }
+                    viewModelScope.launch(Dispatchers.Main) {
+                        val allItems = _queue.value.map { item ->
+                            if (item.id == targetItemId) {
+                                item.copy(paragraphs = originalParagraphs)
+                            } else item
+                        }
+                        _queue.value = allItems
+                        queueRepository.saveQueueData(_folders.value, allItems)
+                        
+                        android.widget.Toast.makeText(
+                            getApplication(),
+                            "Lỗi: Không phân tích được đoạn văn dịch, sử dụng bản gốc.",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                    }
+
                     val finalLog = TransactionLog(
                         id = logId,
                         type = "Hàng chờ",
@@ -1022,13 +1144,26 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 }
             }.onFailure { exception ->
                 val errMsg = exception.message ?: exception.localizedMessage ?: "Lỗi không xác định"
-                _activeTranslations.value = _activeTranslations.value.map {
-                    if (it.id == job.id) it.copy(
-                        status = TranslationStatus.FAILED,
-                        errorMessage = errMsg
-                    ) else it
-                }
+                _activeTranslations.value = _activeTranslations.value.filter { it.id != job.id }
  
+                // Rollback lại văn bản gốc tránh bài viết trống
+                val originalParagraphs = job.text.split("\n\n").map { it.trim() }.filter { it.isNotEmpty() }
+                viewModelScope.launch(Dispatchers.Main) {
+                    val allItems = _queue.value.map { item ->
+                        if (item.id == targetItemId) {
+                            item.copy(paragraphs = originalParagraphs)
+                        } else item
+                    }
+                    _queue.value = allItems
+                    queueRepository.saveQueueData(_folders.value, allItems)
+                    
+                    android.widget.Toast.makeText(
+                        getApplication(),
+                        "Lỗi dịch thuật bài viết \"$currentTitle\", sử dụng bản gốc.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+
                 val finalLog = TransactionLog(
                     id = logId,
                     type = "Hàng chờ",
@@ -1461,6 +1596,7 @@ enum class TranslationStatus {
 
 data class TranslationJobRequest(
     val id: String,
+    val itemId: String, // ID của QueueItem trong hàng chờ
     val text: String,
     val title: String,
     val url: String,
@@ -1470,6 +1606,7 @@ data class TranslationJobRequest(
 
 data class ActiveTranslation(
     val id: String = java.util.UUID.randomUUID().toString(),
+    val itemId: String? = null, // Liên kết với QueueItem
     val title: String,
     val url: String,
     val text: String,
