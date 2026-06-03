@@ -1,7 +1,7 @@
 {
-  "versionCode": 23,
-  "versionName": "1.4.9",
+  "versionCode": 24,
+  "versionName": "1.5.0",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.4.9.apk",
-  "releaseNotes": "Cập nhật v1.4.9: Nâng cấp tính năng dịch nền (hàng chờ) thành dịch truyền luồng (Streaming) theo thời gian thực kết hợp tự động đồng bộ giọng phát đọc; khắc phục lỗi trượt API key (nhảy key) và sửa lỗi cooldown hạn ngạch ngày (RPD) đối với từng phiên bản mô hình."
+  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.5.0.apk",
+  "releaseNotes": "Cập nhật v1.5.0: Thêm tính năng gạt bản dịch sang trái (swipe left) để xóa nhanh các bản dịch khỏi hàng đợi."
 }

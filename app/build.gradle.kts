@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.webreader"
         minSdk = 24
         targetSdk = 36
-        versionCode = 23
-        versionName = "1.4.9"
+        versionCode = 24
+        versionName = "1.5.0"
     }
 
     buildTypes {

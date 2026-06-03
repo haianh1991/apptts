@@ -46,6 +46,10 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.lazy.LazyListItemInfo
@@ -1759,6 +1763,7 @@ fun FolderRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QueueItemCard(
     item: QueueItem,
@@ -1784,104 +1789,144 @@ fun QueueItemCard(
         BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     }
 
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-        border = borderColor
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = item.title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = item.url,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline,
-                    maxLines = 1
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = appStrings.paragraphCountTemplate.format(item.paragraphs.size) + if (isReading) appStrings.readingLabel else "",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { dismissValue ->
+            if (dismissValue == SwipeToDismissBoxValue.EndToStart) {
+                onRemove()
+                true
+            } else {
+                false
             }
+        }
+    )
 
-            Spacer(modifier = Modifier.width(8.dp))
-
-            IconButton(onClick = onPlayPause) {
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = false,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
+            val color = if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+                MaterialTheme.colorScheme.errorContainer
+            } else {
+                Color.Transparent
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(color)
+                    .padding(horizontal = 20.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
                 Icon(
-                    imageVector = if (isCurrent && isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = appStrings.ttsPlay,
-                    tint = MaterialTheme.colorScheme.primary
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = appStrings.btnDelete,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(24.dp)
                 )
             }
-
-            var showItemMenu by remember { mutableStateOf(false) }
-
-            Box {
-                IconButton(onClick = { showItemMenu = true }) {
-                    Icon(
-                        imageVector = Icons.Filled.MoreVert,
-                        contentDescription = appStrings.contentDescriptionExpand,
-                        tint = MaterialTheme.colorScheme.outline
+        },
+        modifier = modifier
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = containerColor),
+            border = borderColor
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = item.url,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        maxLines = 1
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = appStrings.paragraphCountTemplate.format(item.paragraphs.size) + if (isReading) appStrings.readingLabel else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
 
-                DropdownMenu(
-                    expanded = showItemMenu,
-                    onDismissRequest = { showItemMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(appStrings.queueItemMoveMenu) },
-                        onClick = {
-                            showItemMenu = false
-                            onMoveClick()
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Filled.Folder, contentDescription = null)
-                        }
+                Spacer(modifier = Modifier.width(8.dp))
+
+                IconButton(onClick = onPlayPause) {
+                    Icon(
+                        imageVector = if (isCurrent && isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = appStrings.ttsPlay,
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                    DropdownMenuItem(
-                        text = { Text(appStrings.queueItemMoveDown) },
-                        onClick = {
-                            showItemMenu = false
-                            onMoveDown()
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Filled.ArrowDownward, contentDescription = null)
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(appStrings.queueItemMoveToBottom) },
-                        onClick = {
-                            showItemMenu = false
-                            onMoveToBottom()
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Filled.FastForward, contentDescription = null)
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(appStrings.btnDelete, color = MaterialTheme.colorScheme.error) },
-                        onClick = {
-                            showItemMenu = false
-                            onRemove()
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                        }
-                    )
+                }
+
+                var showItemMenu by remember { mutableStateOf(false) }
+
+                Box {
+                    IconButton(onClick = { showItemMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.MoreVert,
+                            contentDescription = appStrings.contentDescriptionExpand,
+                            tint = MaterialTheme.colorScheme.outline
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showItemMenu,
+                        onDismissRequest = { showItemMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(appStrings.queueItemMoveMenu) },
+                            onClick = {
+                                showItemMenu = false
+                                onMoveClick()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Filled.Folder, contentDescription = null)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(appStrings.queueItemMoveDown) },
+                            onClick = {
+                                showItemMenu = false
+                                onMoveDown()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Filled.ArrowDownward, contentDescription = null)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(appStrings.queueItemMoveToBottom) },
+                            onClick = {
+                                showItemMenu = false
+                                onMoveToBottom()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Filled.FastForward, contentDescription = null)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(appStrings.btnDelete, color = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                showItemMenu = false
+                                onRemove()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                            }
+                        )
+                    }
                 }
             }
         }
