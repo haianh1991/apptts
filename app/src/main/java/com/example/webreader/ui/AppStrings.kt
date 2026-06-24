@@ -138,6 +138,9 @@ interface AppStrings {
     val readerTranslatingPrompt: String
     val readerTranslatingSubPrompt: String
     val readerErrorTitle: String
+    val ttsErrorNotInstalledTitle: String
+    val ttsErrorNotInstalledMsg: String
+    val btnOpenTtsSettings: String
     val readerNoContent: String
     val readerNoContentSub: String
     val readerTabContent: String
@@ -327,6 +330,9 @@ class ViAppStrings : AppStrings {
     override val readerTranslatingPrompt = "Đang dịch trang web bằng Gemini AI..."
     override val readerTranslatingSubPrompt = "Quá trình này có thể mất vài giây tùy thuộc vào độ dài trang."
     override val readerErrorTitle = "Đã xảy ra lỗi"
+    override val ttsErrorNotInstalledTitle = "Gói giọng đọc chưa sẵn sàng (Lỗi -8)"
+    override val ttsErrorNotInstalledMsg = "Gói dữ liệu giọng đọc tiếng Việt chưa được cài đặt hoàn chỉnh trên thiết bị của bạn.\n\nHệ điều hành Android đang tự động tải gói dữ liệu này ở chế độ nền. Vui lòng kết nối Wi-Fi/Internet và thử lại sau ít phút.\n\nHoặc bạn có thể tự cài đặt thủ công:\n1. Nhấp vào nút 'Mở cài đặt giọng đọc (TTS)' bên dưới.\n2. Chọn biểu tượng răng cưa bên cạnh 'Công cụ ưu tiên' (ví dụ: Dịch vụ giọng nói của Google).\n3. Chọn 'Cài đặt dữ liệu giọng nói' -> tìm và chọn 'Tiếng Việt' để tải xuống."
+    override val btnOpenTtsSettings = "Mở cài đặt giọng đọc (TTS)"
     override val readerNoContent = "Không có nội dung dịch."
     override val readerNoContentSub = "Hãy tải một trang web và nhấn nút Dịch ở góc màn hình."
     override val readerTabContent = "Nội dung"
@@ -516,6 +522,9 @@ class EnAppStrings : AppStrings {
     override val readerTranslatingPrompt = "Translating webpage using Gemini AI..."
     override val readerTranslatingSubPrompt = "This process may take a few seconds depending on page length."
     override val readerErrorTitle = "An error occurred"
+    override val ttsErrorNotInstalledTitle = "Voice Pack Not Ready (Error -8)"
+    override val ttsErrorNotInstalledMsg = "The Vietnamese voice data package is not fully installed on your device.\n\nAndroid is auto-downloading this package in the background. Please connect to Wi-Fi/Internet and try again in a few minutes.\n\nOr you can manually install it:\n1. Click the 'Open TTS Settings' button below.\n2. Click the gear icon next to your 'Preferred engine' (e.g. Speech Services by Google).\n3. Select 'Install voice data' -> find 'Vietnamese' and download it."
+    override val btnOpenTtsSettings = "Open TTS Settings"
     override val readerNoContent = "No translated content."
     override val readerNoContentSub = "Load a webpage and click the Translate button at the corner."
     override val readerTabContent = "Content"
@@ -705,6 +714,9 @@ class ZhAppStrings : AppStrings {
     override val readerTranslatingPrompt = "正在使用 Gemini AI 翻译网页..."
     override val readerTranslatingSubPrompt = "此过程可能需要几秒钟，具体取决于页面长度。"
     override val readerErrorTitle = "发生错误"
+    override val ttsErrorNotInstalledTitle = "语音包未就绪 (错误码 -8)"
+    override val ttsErrorNotInstalledMsg = "您的设备上尚未完整安装越南语语音数据包。\n\nAndroid 正在后台自动下载该数据包。请连接 Wi-Fi/网络并于几分钟后重试。\n\n或者您可以手动安装：\n1. 点击下方的“打开语音合成 (TTS) 设置”按钮。\n2. 点击“首选引擎”（例如 Google 语音服务）旁边的齿轮图标。\n3. 选择“安装语音数据” -> 找到并选择“越南语”进行下载。"
+    override val btnOpenTtsSettings = "打开语音合成设置"
     override val readerNoContent = "暂无翻译内容。"
     override val readerNoContentSub = "请加载一个网页，然后点击角落的翻译按钮。"
     override val readerTabContent = "内容"

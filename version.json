@@ -1,7 +1,7 @@
 {
-  "versionCode": 25,
-  "versionName": "1.5.1",
+  "versionCode": 26,
+  "versionName": "1.5.2",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.5.1.apk",
-  "releaseNotes": "Cập nhật v1.5.1: Thêm tính năng Thùng rác (Recycle Bin) để khôi phục bài viết xóa nhầm; bổ sung tùy chọn sắp xếp chuyển lên đầu/chuyển lên 1 hàng; sửa lỗi biểu tượng thùng rác đè mờ lên dấu ba chấm."
+  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.5.2.apk",
+  "releaseNotes": "Cập nhật v1.5.2: Tự động phân mảnh đoạn văn siêu dài trước khi phát âm thanh nhằm khắc phục triệt để lỗi giọng đọc mã lỗi -8 (do vượt giới hạn ký tự tối đa của TTS); cải tiến thông báo lỗi gói âm thanh chưa sẵn sàng với nút bấm cấu hình trực tiếp."
 }

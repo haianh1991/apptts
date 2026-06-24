@@ -432,21 +432,34 @@ fun ReaderSheet(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.Center
                                 ) {
+                                    val isTtsNotInstalled = errorMessage == "TTS_ERROR_NOT_INSTALLED_YET"
                                     Text(
-                                        text = appStrings.readerErrorTitle,
+                                        text = if (isTtsNotInstalled) appStrings.ttsErrorNotInstalledTitle else appStrings.readerErrorTitle,
                                         style = MaterialTheme.typography.titleMedium,
                                         color = MaterialTheme.colorScheme.error,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(
-                                        text = errorMessage ?: "",
+                                        text = if (isTtsNotInstalled) appStrings.ttsErrorNotInstalledMsg else (errorMessage ?: ""),
                                         style = MaterialTheme.typography.bodyMedium,
-                                        textAlign = TextAlign.Center,
+                                        textAlign = if (isTtsNotInstalled) TextAlign.Start else TextAlign.Center,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Spacer(modifier = Modifier.height(16.dp))
-                                    if (errorMessage!!.contains("API Key")) {
+                                    if (isTtsNotInstalled) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            OutlinedButton(onClick = { viewModel.clearError() }) {
+                                                Text(appStrings.btnIgnoreError)
+                                            }
+                                            Button(onClick = { viewModel.ttsManager.openTtsSettings() }) {
+                                                Text(appStrings.btnOpenTtsSettings)
+                                            }
+                                        }
+                                    } else if (errorMessage!!.contains("API Key")) {
                                         Button(onClick = onOpenSettings) {
                                             Text(appStrings.btnGoToSettings)
                                         }
