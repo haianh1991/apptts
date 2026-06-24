@@ -164,6 +164,17 @@ interface AppStrings {
     val queueItemMoveMenu: String
     val queueItemMoveDown: String
     val queueItemMoveToBottom: String
+    val queueItemMoveUp: String
+    val queueItemMoveToTop: String
+    val trashTabFormat: String
+    val trashTitle: String
+    val trashEmpty: String
+    val trashEmptySub: String
+    val btnEmptyTrash: String
+    val btnRestore: String
+    val btnPermanentlyDelete: String
+    val toastRestoredItem: String
+    val toastClearedTrash: String
     val paragraphCountTemplate: String
     val readerTranslatingMore: String
     val readerTitle: String
@@ -342,6 +353,17 @@ class ViAppStrings : AppStrings {
     override val queueItemMoveMenu = "Di chuyển vào thư mục"
     override val queueItemMoveDown = "Chuyển xuống (1 hàng)"
     override val queueItemMoveToBottom = "Chuyển xuống cuối"
+    override val queueItemMoveUp = "Chuyển lên (1 hàng)"
+    override val queueItemMoveToTop = "Chuyển lên đầu"
+    override val trashTabFormat = "Thùng rác (%d)"
+    override val trashTitle = "Thùng rác"
+    override val trashEmpty = "Thùng rác trống"
+    override val trashEmptySub = "Các bản dịch bị xóa sẽ xuất hiện ở đây để khôi phục khi cần."
+    override val btnEmptyTrash = "Xóa sạch thùng rác"
+    override val btnRestore = "Khôi phục"
+    override val btnPermanentlyDelete = "Xóa vĩnh viễn"
+    override val toastRestoredItem = "Đã khôi phục bản dịch thành công"
+    override val toastClearedTrash = "Đã dọn sạch thùng rác"
     override val paragraphCountTemplate = "%d đoạn văn"
     override val readerTranslatingMore = "Đang dịch tiếp..."
     override val readerTitle = "Trình Đọc Báo Tiếng Việt"
@@ -520,6 +542,17 @@ class EnAppStrings : AppStrings {
     override val queueItemMoveMenu = "Move to folder"
     override val queueItemMoveDown = "Move Down (1 row)"
     override val queueItemMoveToBottom = "Move to Bottom"
+    override val queueItemMoveUp = "Move Up (1 row)"
+    override val queueItemMoveToTop = "Move to Top"
+    override val trashTabFormat = "Trash (%d)"
+    override val trashTitle = "Trash"
+    override val trashEmpty = "Trash is empty"
+    override val trashEmptySub = "Deleted translations will appear here to restore if needed."
+    override val btnEmptyTrash = "Empty Trash"
+    override val btnRestore = "Restore"
+    override val btnPermanentlyDelete = "Delete Permanently"
+    override val toastRestoredItem = "Restored translation successfully"
+    override val toastClearedTrash = "Cleared trash successfully"
     override val paragraphCountTemplate = "%d paragraphs"
     override val readerTranslatingMore = "Translating next..."
     override val readerTitle = "Article Reader"
@@ -698,6 +731,17 @@ class ZhAppStrings : AppStrings {
     override val queueItemMoveMenu = "移动到文件夹"
     override val queueItemMoveDown = "下移一格"
     override val queueItemMoveToBottom = "移至底部"
+    override val queueItemMoveUp = "上移一格"
+    override val queueItemMoveToTop = "移至顶部"
+    override val trashTabFormat = "回收站 (%d)"
+    override val trashTitle = "回收站"
+    override val trashEmpty = "回收站为空"
+    override val trashEmptySub = "被删除的翻译将出现在这里以便需要时恢复。"
+    override val btnEmptyTrash = "清空回收站"
+    override val btnRestore = "恢复"
+    override val btnPermanentlyDelete = "永久删除"
+    override val toastRestoredItem = "已成功恢复翻译"
+    override val toastClearedTrash = "已清空回收站"
     override val paragraphCountTemplate = "%d 段"
     override val readerTranslatingMore = "正在翻译下一段..."
     override val readerTitle = "网页阅读器"

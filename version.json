@@ -1,7 +1,7 @@
 {
-  "versionCode": 24,
-  "versionName": "1.5.0",
+  "versionCode": 25,
+  "versionName": "1.5.1",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.5.0.apk",
-  "releaseNotes": "Cập nhật v1.5.0: Thêm tính năng gạt bản dịch sang trái (swipe left) để xóa nhanh các bản dịch khỏi hàng đợi."
+  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.5.1.apk",
+  "releaseNotes": "Cập nhật v1.5.1: Thêm tính năng Thùng rác (Recycle Bin) để khôi phục bài viết xóa nhầm; bổ sung tùy chọn sắp xếp chuyển lên đầu/chuyển lên 1 hàng; sửa lỗi biểu tượng thùng rác đè mờ lên dấu ba chấm."
 }

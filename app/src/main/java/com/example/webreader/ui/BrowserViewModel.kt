@@ -50,6 +50,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private val _queue = MutableStateFlow<List<QueueItem>>(emptyList())
     val queue: StateFlow<List<QueueItem>> = _queue
 
+    private val _trash = MutableStateFlow<List<QueueItem>>(emptyList())
+    val trash: StateFlow<List<QueueItem>> = _trash
+
     private val _folders = MutableStateFlow<List<QueueFolder>>(emptyList())
     val folders: StateFlow<List<QueueFolder>> = _folders
 
@@ -149,6 +152,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         val sortedItems = sortQueueItems(queueData.items, queueData.folders)
         _queue.value = sortedItems
         _bookmarks.value = bookmarkRepository.getBookmarks()
+        _trash.value = queueRepository.getTrashData()
         updateBookmarkStatus()
         
         // Restore last read item state if exists
@@ -878,9 +882,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             } else if (currentIdx > index) {
                 _currentQueueItemIndex.value = currentIdx - 1
             }
-            qList.removeAt(index)
+            val removedItem = qList.removeAt(index)
             _queue.value = qList
             queueRepository.saveQueueData(_folders.value, qList)
+
+            val updatedTrash = _trash.value.toMutableList().apply { add(0, removedItem) }
+            _trash.value = updatedTrash
+            queueRepository.saveTrashData(updatedTrash)
         }
     }
 
@@ -891,10 +899,17 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _currentParagraphIndex.value = -1
         _currentQueueItemIndex.value = -1
         updateLastReadQueueItemId("")
+        val itemsToTrash = _queue.value
         _queue.value = emptyList()
         _folders.value = emptyList()
         _activeTranslations.value = emptyList()
         queueRepository.clearQueue()
+
+        if (itemsToTrash.isNotEmpty()) {
+            val updatedTrash = _trash.value.toMutableList().apply { addAll(0, itemsToTrash) }
+            _trash.value = updatedTrash
+            queueRepository.saveTrashData(updatedTrash)
+        }
     }
 
     fun retryTranslation(job: ActiveTranslation) {
@@ -1308,6 +1323,101 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         reorderQueueItems(itemId, lastItem.id)
     }
 
+    fun moveQueueItemUp(itemId: String) {
+        val currentList = _queue.value.toMutableList()
+        val itemIndex = currentList.indexOfFirst { it.id == itemId }
+        if (itemIndex == -1) return
+        
+        val item = currentList[itemIndex]
+        val folderId = item.folderId
+        
+        val groupItems = currentList.filter { it.folderId == folderId }.toMutableList()
+        val sortedGroup = if (folderId != null) {
+            groupItems.sortedBy { it.createdAt }
+        } else {
+            val foldersList = _folders.value
+            val folderIds = foldersList.map { it.id }.toSet()
+            groupItems.filter { it.folderId == null || !folderIds.contains(it.folderId) }.sortedByDescending { it.createdAt }
+        }
+        
+        val idxInGroup = sortedGroup.indexOfFirst { it.id == itemId }
+        if (idxInGroup <= 0) return
+        
+        val prevItem = sortedGroup[idxInGroup - 1]
+        reorderQueueItems(itemId, prevItem.id)
+    }
+
+    fun moveQueueItemToTop(itemId: String) {
+        val currentList = _queue.value.toMutableList()
+        val itemIndex = currentList.indexOfFirst { it.id == itemId }
+        if (itemIndex == -1) return
+        
+        val item = currentList[itemIndex]
+        val folderId = item.folderId
+        
+        val groupItems = currentList.filter { it.folderId == folderId }.toMutableList()
+        val sortedGroup = if (folderId != null) {
+            groupItems.sortedBy { it.createdAt }
+        } else {
+            val foldersList = _folders.value
+            val folderIds = foldersList.map { it.id }.toSet()
+            groupItems.filter { it.folderId == null || !folderIds.contains(it.folderId) }.sortedByDescending { it.createdAt }
+        }
+        
+        val idxInGroup = sortedGroup.indexOfFirst { it.id == itemId }
+        if (idxInGroup <= 0) return
+        
+        val firstItem = sortedGroup.first()
+        reorderQueueItems(itemId, firstItem.id)
+    }
+
+    private fun getAppStrings(): AppStrings {
+        return when (settings.appDisplayLanguage) {
+            "en" -> EnAppStrings()
+            "zh" -> ZhAppStrings()
+            else -> ViAppStrings()
+        }
+    }
+
+    fun restoreQueueItem(itemId: String) {
+        val trashList = _trash.value.toMutableList()
+        val index = trashList.indexOfFirst { it.id == itemId }
+        if (index != -1) {
+            val itemToRestore = trashList.removeAt(index)
+            _trash.value = trashList
+            queueRepository.saveTrashData(trashList)
+
+            val foldersList = _folders.value
+            val folderExists = foldersList.any { it.id == itemToRestore.folderId }
+            val restoredItem = if (folderExists) itemToRestore else itemToRestore.copy(folderId = null)
+
+            val currentList = _queue.value.toMutableList().apply { add(restoredItem) }
+            val sortedList = sortQueueItems(currentList, foldersList)
+            _queue.value = sortedList
+            queueRepository.saveQueueData(foldersList, sortedList)
+
+            val appStrings = getAppStrings()
+            android.widget.Toast.makeText(getApplication(), appStrings.toastRestoredItem, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun deleteQueueItemPermanently(itemId: String) {
+        val trashList = _trash.value.toMutableList()
+        val index = trashList.indexOfFirst { it.id == itemId }
+        if (index != -1) {
+            trashList.removeAt(index)
+            _trash.value = trashList
+            queueRepository.saveTrashData(trashList)
+        }
+    }
+
+    fun clearTrash() {
+        _trash.value = emptyList()
+        queueRepository.saveTrashData(emptyList())
+        val appStrings = getAppStrings()
+        android.widget.Toast.makeText(getApplication(), appStrings.toastClearedTrash, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
     fun createFolder(name: String): String {
         val folderId = java.util.UUID.randomUUID().toString()
         val newFolder = QueueFolder(
@@ -1337,6 +1447,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _folders.value = updatedFolders
         
         val currentQueue = _queue.value
+        val itemsToDelete = if (deleteItems) currentQueue.filter { it.folderId == folderId } else emptyList()
         val updatedQueue = if (deleteItems) {
             val activeItemIndex = _currentQueueItemIndex.value
             val isPlayingItemDeleted = activeItemIndex != -1 && currentQueue[activeItemIndex].folderId == folderId
@@ -1370,6 +1481,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
         
         queueRepository.saveQueueData(updatedFolders, sortedItems)
+
+        if (itemsToDelete.isNotEmpty()) {
+            val updatedTrash = _trash.value.toMutableList().apply { addAll(0, itemsToDelete) }
+            _trash.value = updatedTrash
+            queueRepository.saveTrashData(updatedTrash)
+        }
     }
 
     fun moveQueueItemToFolder(itemId: String, folderId: String?) {
@@ -1416,9 +1533,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             } else if (currentIdx > index) {
                 _currentQueueItemIndex.value = currentIdx - 1
             }
-            qList.removeAt(index)
+            val removedItem = qList.removeAt(index)
             _queue.value = qList
             queueRepository.saveQueueData(_folders.value, qList)
+
+            val updatedTrash = _trash.value.toMutableList().apply { add(0, removedItem) }
+            _trash.value = updatedTrash
+            queueRepository.saveTrashData(updatedTrash)
         }
     }
 

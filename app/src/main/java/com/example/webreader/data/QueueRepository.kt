@@ -67,6 +67,34 @@ class QueueRepository(context: Context) {
         }
     }
 
+    private val trashFile = File(context.filesDir, "tts_trash.json")
+
+    fun getTrashData(): List<QueueItem> {
+        if (!trashFile.exists()) return emptyList()
+        return try {
+            val content = trashFile.readText().trim()
+            val arr = JSONArray(content)
+            val items = mutableListOf<QueueItem>()
+            for (i in 0 until arr.length()) {
+                items.add(QueueItem.fromJsonObject(arr.getJSONObject(i)))
+            }
+            items
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
+    fun saveTrashData(items: List<QueueItem>) {
+        try {
+            val arr = JSONArray()
+            items.forEach { arr.put(it.toJsonObject()) }
+            trashFile.writeText(arr.toString())
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     fun clearQueue() {
         try {
             if (queueFile.exists()) {

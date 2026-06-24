@@ -41,7 +41,9 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedTextField
@@ -109,6 +111,7 @@ fun ReaderSheet(
     val title by viewModel.title.collectAsState()
     val queue by viewModel.queue.collectAsState()
     val bookmarks by viewModel.bookmarks.collectAsState()
+    val trash by viewModel.trash.collectAsState()
     val currentQueueItemIndex by viewModel.currentQueueItemIndex.collectAsState()
     val lastReadQueueItemId by viewModel.lastReadQueueItemId.collectAsState()
     var activeTab by remember { mutableIntStateOf(0) }
@@ -283,6 +286,26 @@ fun ReaderSheet(
                     Text(
                         text = String.format(appStrings.readerTabBookmarksFormat, bookmarks.size),
                         color = if (activeTab == 2) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
+                // Tab Thùng rác
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (activeTab == 3) MaterialTheme.colorScheme.primary else Color.Transparent
+                        )
+                        .clickable { activeTab = 3 },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = String.format(appStrings.trashTabFormat, trash.size),
+                        color = if (activeTab == 3) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.SemiBold,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -933,6 +956,8 @@ fun ReaderSheet(
                                                     },
                                                     onRemove = { viewModel.removeQueueItemById(qItem.id) },
                                                     onMoveClick = { itemToMove = qItem },
+                                                    onMoveUp = { viewModel.moveQueueItemUp(qItem.id) },
+                                                    onMoveToTop = { viewModel.moveQueueItemToTop(qItem.id) },
                                                     onMoveDown = { viewModel.moveQueueItemDown(qItem.id) },
                                                     onMoveToBottom = { viewModel.moveQueueItemToBottom(qItem.id) },
                                                     modifier = Modifier.padding(start = 16.dp)
@@ -970,6 +995,8 @@ fun ReaderSheet(
                                                     },
                                                     onRemove = { viewModel.removeQueueItemById(qItem.id) },
                                                     onMoveClick = { itemToMove = qItem },
+                                                    onMoveUp = { viewModel.moveQueueItemUp(qItem.id) },
+                                                    onMoveToTop = { viewModel.moveQueueItemToTop(qItem.id) },
                                                     onMoveDown = { viewModel.moveQueueItemDown(qItem.id) },
                                                     onMoveToBottom = { viewModel.moveQueueItemToBottom(qItem.id) }
                                                 )
@@ -1006,6 +1033,8 @@ fun ReaderSheet(
                                                     },
                                                     onRemove = { viewModel.removeQueueItemById(qItem.id) },
                                                     onMoveClick = { itemToMove = qItem },
+                                                    onMoveUp = { viewModel.moveQueueItemUp(qItem.id) },
+                                                    onMoveToTop = { viewModel.moveQueueItemToTop(qItem.id) },
                                                     onMoveDown = { viewModel.moveQueueItemDown(qItem.id) },
                                                     onMoveToBottom = { viewModel.moveQueueItemToBottom(qItem.id) }
                                                 )
@@ -1132,6 +1161,15 @@ fun ReaderSheet(
                                 }
                             }
                         }
+                    }
+                    3 -> {
+                        TrashTabContent(
+                            trash = trash,
+                            onRestore = { viewModel.restoreQueueItem(it) },
+                            onDeletePermanently = { viewModel.deleteQueueItemPermanently(it) },
+                            onClearTrash = { viewModel.clearTrash() },
+                            appStrings = appStrings
+                        )
                     }
                 }
             }
@@ -1773,6 +1811,8 @@ fun QueueItemCard(
     onPlayPause: () -> Unit,
     onRemove: () -> Unit,
     onMoveClick: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveToTop: () -> Unit,
     onMoveDown: () -> Unit,
     onMoveToBottom: () -> Unit,
     modifier: Modifier = Modifier
@@ -1805,25 +1845,23 @@ fun QueueItemCard(
         enableDismissFromStartToEnd = false,
         enableDismissFromEndToStart = true,
         backgroundContent = {
-            val color = if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
-                MaterialTheme.colorScheme.errorContainer
-            } else {
-                Color.Transparent
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(color)
-                    .padding(horizontal = 20.dp),
-                contentAlignment = Alignment.CenterEnd
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Delete,
-                    contentDescription = appStrings.btnDelete,
-                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.size(24.dp)
-                )
+            val direction = dismissState.dismissDirection
+            if (direction == SwipeToDismissBoxValue.EndToStart) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.errorContainer)
+                        .padding(horizontal = 20.dp),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = appStrings.btnDelete,
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
         },
         modifier = modifier
@@ -1897,6 +1935,26 @@ fun QueueItemCard(
                             }
                         )
                         DropdownMenuItem(
+                            text = { Text(appStrings.queueItemMoveToTop) },
+                            onClick = {
+                                showItemMenu = false
+                                onMoveToTop()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Filled.FastRewind, contentDescription = null)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(appStrings.queueItemMoveUp) },
+                            onClick = {
+                                showItemMenu = false
+                                onMoveUp()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Filled.ArrowUpward, contentDescription = null)
+                            }
+                        )
+                        DropdownMenuItem(
                             text = { Text(appStrings.queueItemMoveDown) },
                             onClick = {
                                 showItemMenu = false
@@ -1945,4 +2003,145 @@ sealed class QueueListItem {
     data class RootQueueItem(val item: QueueItem) : QueueListItem()
     data class FinishedHeader(val count: Int) : QueueListItem()
     data class FlatQueueItem(val item: QueueItem) : QueueListItem()
+}
+
+@Composable
+fun TrashTabContent(
+    trash: List<QueueItem>,
+    onRestore: (String) -> Unit,
+    onDeletePermanently: (String) -> Unit,
+    onClearTrash: () -> Unit,
+    appStrings: AppStrings
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = appStrings.trashTitle,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            if (trash.isNotEmpty()) {
+                TextButton(onClick = onClearTrash) {
+                    Text(
+                        text = appStrings.btnEmptyTrash,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+
+        if (trash.isEmpty()) {
+            Box(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = appStrings.trashEmpty,
+                        tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = appStrings.trashEmpty,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = appStrings.trashEmptySub,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(
+                    count = trash.size,
+                    key = { index -> "trash_item_${trash[index].id}" }
+                ) { index ->
+                    val item = trash[index]
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 2
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = item.url,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    maxLines = 1
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = appStrings.paragraphCountTemplate.format(item.paragraphs.size),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.width(8.dp))
+                            
+                            IconButton(onClick = { onRestore(item.id) }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Restore,
+                                    contentDescription = appStrings.btnRestore,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            
+                            IconButton(onClick = { onDeletePermanently(item.id) }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Delete,
+                                    contentDescription = appStrings.btnPermanentlyDelete,
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+        }
+    }
 }
