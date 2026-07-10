@@ -1604,6 +1604,29 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         updateBookmarkStatus()
     }
 
+    fun addBookmark(title: String, url: String) {
+        val currentList = _bookmarks.value.toMutableList()
+        currentList.removeAll { it.url == url }
+        currentList.add(
+            BookmarkItem(
+                id = java.util.UUID.randomUUID().toString(),
+                title = title.trim(),
+                url = url
+            )
+        )
+        _bookmarks.value = currentList
+        bookmarkRepository.saveBookmarks(currentList)
+        updateBookmarkStatus()
+    }
+
+    fun updateBookmarkTitle(id: String, newTitle: String) {
+        val currentList = _bookmarks.value.map {
+            if (it.id == id) it.copy(title = newTitle.trim()) else it
+        }
+        _bookmarks.value = currentList
+        bookmarkRepository.saveBookmarks(currentList)
+    }
+
     fun loadUrlInBrowser(newUrl: String) {
         _navigationRequest.tryEmit(newUrl)
     }

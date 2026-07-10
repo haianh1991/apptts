@@ -128,6 +128,10 @@ interface AppStrings {
     val toastLogCopied: String
     val toastBookmarkAdded: String
     val toastBookmarkRemoved: String
+    val dialogAddBookmarkTitle: String
+    val dialogEditBookmarkTitle: String
+    val bookmarkTitleLabel: String
+    val btnDeleteBookmark: String
     val ttsPlay: String
     val ttsPause: String
     val ttsForward: String
@@ -320,6 +324,10 @@ class ViAppStrings : AppStrings {
     override val toastLogCopied = "Đã sao chép nhật ký vào Clipboard"
     override val toastBookmarkAdded = "Đã thêm vào mục Đã lưu"
     override val toastBookmarkRemoved = "Đã xóa khỏi mục Đã lưu"
+    override val dialogAddBookmarkTitle = "Thêm Đánh Dấu"
+    override val dialogEditBookmarkTitle = "Chỉnh Sửa Đánh Dấu"
+    override val bookmarkTitleLabel = "Tên nhãn đánh dấu"
+    override val btnDeleteBookmark = "Xóa Đánh Dấu"
     override val ttsPlay = "Phát"
     override val ttsPause = "Tạm dừng"
     override val ttsForward = "Tua tới"
@@ -512,6 +520,10 @@ class EnAppStrings : AppStrings {
     override val toastLogCopied = "Logs copied to clipboard"
     override val toastBookmarkAdded = "Added to Bookmarks"
     override val toastBookmarkRemoved = "Removed from Bookmarks"
+    override val dialogAddBookmarkTitle = "Add Bookmark"
+    override val dialogEditBookmarkTitle = "Edit Bookmark"
+    override val bookmarkTitleLabel = "Bookmark Label"
+    override val btnDeleteBookmark = "Delete Bookmark"
     override val ttsPlay = "Play"
     override val ttsPause = "Pause"
     override val ttsForward = "Forward"
@@ -704,6 +716,10 @@ class ZhAppStrings : AppStrings {
     override val toastLogCopied = "已复制日志到剪贴板"
     override val toastBookmarkAdded = "已添加到书签"
     override val toastBookmarkRemoved = "已从书签中移除"
+    override val dialogAddBookmarkTitle = "添加书签"
+    override val dialogEditBookmarkTitle = "编辑书签"
+    override val bookmarkTitleLabel = "书签标签"
+    override val btnDeleteBookmark = "删除书签"
     override val ttsPlay = "播放"
     override val ttsPause = "暂停"
     override val ttsForward = "快进"

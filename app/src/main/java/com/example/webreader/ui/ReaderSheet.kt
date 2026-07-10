@@ -128,6 +128,8 @@ fun ReaderSheet(
     var folderToDelete by remember { mutableStateOf<QueueFolder?>(null) }
 
     var itemToMove by remember { mutableStateOf<QueueItem?>(null) }
+    var editingBookmark by remember { mutableStateOf<com.example.webreader.data.BookmarkItem?>(null) }
+    var editBookmarkText by remember { mutableStateOf("") }
 
     val currentItem = queue.getOrNull(currentQueueItemIndex)
 
@@ -1157,14 +1159,27 @@ fun ReaderSheet(
                                                 }
                                                 Spacer(modifier = Modifier.width(8.dp))
                                                 IconButton(
-                                                    onClick = { viewModel.deleteBookmark(item) }
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Filled.Close,
-                                                        contentDescription = appStrings.btnDelete,
-                                                        tint = MaterialTheme.colorScheme.error
-                                                    )
-                                                }
+                                                    onClick = {
+                                                        editingBookmark = item
+                                                        editBookmarkText = item.title
+                                                    }
+                                                 ) {
+                                                     Icon(
+                                                         imageVector = Icons.Filled.Edit,
+                                                         contentDescription = appStrings.btnEdit,
+                                                         tint = MaterialTheme.colorScheme.primary
+                                                     )
+                                                 }
+                                                 Spacer(modifier = Modifier.width(4.dp))
+                                                 IconButton(
+                                                     onClick = { viewModel.deleteBookmark(item) }
+                                                 ) {
+                                                     Icon(
+                                                         imageVector = Icons.Filled.Close,
+                                                         contentDescription = appStrings.btnDelete,
+                                                         tint = MaterialTheme.colorScheme.error
+                                                     )
+                                                 }
                                             }
                                         }
                                     }
@@ -1540,6 +1555,41 @@ fun ReaderSheet(
             dismissButton = {
                 TextButton(onClick = { itemToMove = null }) {
                     Text(appStrings.btnClose)
+                }
+            }
+        )
+    }
+
+    if (editingBookmark != null) {
+        AlertDialog(
+            onDismissRequest = { editingBookmark = null },
+            title = { Text(appStrings.dialogEditBookmarkTitle, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = editBookmarkText,
+                        onValueChange = { editBookmarkText = it },
+                        label = { Text(appStrings.bookmarkTitleLabel) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (editBookmarkText.isNotBlank()) {
+                            viewModel.updateBookmarkTitle(editingBookmark!!.id, editBookmarkText)
+                        }
+                        editingBookmark = null
+                    }
+                ) {
+                    Text(appStrings.btnSave)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingBookmark = null }) {
+                    Text(appStrings.btnCancel)
                 }
             }
         )

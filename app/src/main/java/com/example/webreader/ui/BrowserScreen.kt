@@ -92,6 +92,8 @@ fun BrowserScreen(
 ) {
     val appStrings = LocalAppStrings.current
     val currentUrl by viewModel.url.collectAsState()
+    val currentTitle by viewModel.title.collectAsState()
+    val bookmarks by viewModel.bookmarks.collectAsState()
     val isLoadingPage by viewModel.isLoading.collectAsState()
     val canGoBack by viewModel.canGoBack.collectAsState()
     val canGoForward by viewModel.canGoForward.collectAsState()
@@ -111,6 +113,11 @@ fun BrowserScreen(
     var capturedTitleForQueue by remember { mutableStateOf("") }
     var capturedUrlForQueue by remember { mutableStateOf("") }
     var isAddressBarFocused by remember { mutableStateOf(false) }
+    var showBookmarkDialog by remember { mutableStateOf(false) }
+    var bookmarkDialogIsEdit by remember { mutableStateOf(false) }
+    var bookmarkDialogText by remember { mutableStateOf("") }
+    var bookmarkDialogUrl by remember { mutableStateOf("") }
+    var bookmarkDialogItemId by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
 
@@ -196,7 +203,22 @@ fun BrowserScreen(
                     if (!isAddressBarFocused) {
                         // Nút Đánh dấu trang (Star) - nằm bên phải, luôn xuất hiện khi không nhập URL
                         val isBookmarked by viewModel.isCurrentPageBookmarked.collectAsState()
-                        IconButton(onClick = { viewModel.toggleBookmarkCurrentPage() }) {
+                        IconButton(onClick = {
+                            val url = currentUrl
+                            val existing = bookmarks.find { it.url == url }
+                            if (existing != null) {
+                                bookmarkDialogItemId = existing.id
+                                bookmarkDialogText = existing.title
+                                bookmarkDialogUrl = existing.url
+                                bookmarkDialogIsEdit = true
+                            } else {
+                                bookmarkDialogItemId = ""
+                                bookmarkDialogText = currentTitle
+                                bookmarkDialogUrl = url
+                                bookmarkDialogIsEdit = false
+                            }
+                            showBookmarkDialog = true
+                        }) {
                             Icon(
                                 imageVector = Icons.Filled.Star,
                                 contentDescription = "Đánh dấu trang",
@@ -817,6 +839,66 @@ fun BrowserScreen(
                             }
                         }
                     } else null
+                )
+            }
+
+            if (showBookmarkDialog) {
+                AlertDialog(
+                    onDismissRequest = { showBookmarkDialog = false },
+                    title = {
+                        Text(
+                            text = if (bookmarkDialogIsEdit) appStrings.dialogEditBookmarkTitle else appStrings.dialogAddBookmarkTitle,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    text = {
+                        Column {
+                            OutlinedTextField(
+                                value = bookmarkDialogText,
+                                onValueChange = { bookmarkDialogText = it },
+                                label = { Text(appStrings.bookmarkTitleLabel) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                if (bookmarkDialogText.isNotBlank()) {
+                                    if (bookmarkDialogIsEdit) {
+                                        viewModel.updateBookmarkTitle(bookmarkDialogItemId, bookmarkDialogText)
+                                    } else {
+                                        viewModel.addBookmark(bookmarkDialogText, bookmarkDialogUrl)
+                                    }
+                                }
+                                showBookmarkDialog = false
+                            }
+                        ) {
+                            Text(appStrings.btnSave)
+                        }
+                    },
+                    dismissButton = {
+                        Row {
+                            if (bookmarkDialogIsEdit) {
+                                TextButton(
+                                    onClick = {
+                                        val item = bookmarks.find { it.id == bookmarkDialogItemId }
+                                        if (item != null) {
+                                            viewModel.deleteBookmark(item)
+                                        }
+                                        showBookmarkDialog = false
+                                    }
+                                ) {
+                                    Text(appStrings.btnDeleteBookmark, color = MaterialTheme.colorScheme.error)
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            TextButton(onClick = { showBookmarkDialog = false }) {
+                                Text(appStrings.btnCancel)
+                            }
+                        }
+                    }
                 )
             }
         }

@@ -1,7 +1,7 @@
 {
-  "versionCode": 26,
-  "versionName": "1.5.2",
+  "versionCode": 27,
+  "versionName": "1.5.3",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.5.2.apk",
-  "releaseNotes": "Cập nhật v1.5.2: Tự động phân mảnh đoạn văn siêu dài trước khi phát âm thanh nhằm khắc phục triệt để lỗi giọng đọc mã lỗi -8 (do vượt giới hạn ký tự tối đa của TTS); cải tiến thông báo lỗi gói âm thanh chưa sẵn sàng với nút bấm cấu hình trực tiếp."
+  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.5.3.apk",
+  "releaseNotes": "Cập nhật v1.5.3: Hỗ trợ tự nhập/chỉnh sửa nhãn (label) cho các trang đánh dấu (bookmark) khi thêm mới hoặc từ danh sách đã lưu."
 }
