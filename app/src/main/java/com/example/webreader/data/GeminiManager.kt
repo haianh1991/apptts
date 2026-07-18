@@ -232,10 +232,6 @@ class GeminiManager {
         val srcTextZh = if (sourceLang.equals("Auto", ignoreCase = true)) "自动检测" else sourceLang
         val srcTextEn = if (sourceLang.equals("Auto", ignoreCase = true)) "automatically detected" else sourceLang
 
-        val customPart = if (hasCustom) {
-            "\n\n<user_custom_rules>\n${customInstructions.trim()}\n</user_custom_rules>"
-        } else ""
-
         val disclaimerPart = if (hasDisclaimer) {
             "\n\n<system_warning>\n${disclaimerText.trim()}\n</system_warning>"
         } else ""
@@ -287,6 +283,10 @@ class GeminiManager {
                 """.trimIndent()
             }
 
+            val rule6Vi = if (hasCustom) {
+                "\n6. **Tuân thủ quy tắc bổ sung**:\n${customInstructions.trim()}"
+            } else ""
+
             systemInstruction = """
                 <role>
                 Bạn là chuyên gia dịch thuật văn học và trích xuất nội dung sạch từ trang web.
@@ -300,8 +300,7 @@ class GeminiManager {
                    - Các bình luận bên lề của độc giả hoặc quảng cáo bằng chữ khác không liên quan đến cốt truyện chính.
                 3. **Dịch văn học**: Dịch nội dung chính vừa lọc được từ ngôn ngữ gốc ($srcTextVi) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, trôi chảy, đúng ngữ cảnh văn học phong cách truyện chữ. Sử dụng từ Hán-Việt mượt mà, xưng hô phù hợp bối cảnh nhân vật.
                 4. **Giữ nguyên định dạng**: Giữ nguyên cấu trúc các phân đoạn gốc (phân tách các đoạn văn bằng các dòng trống \n\n).
-                5. **Đầu ra nghiêm ngặt**: Tuyệt đối không thêm bất kỳ văn bản giới thiệu, chú thích ngoài lề hay lời thoại dẫn dắt nào của AI (như "Dưới đây là bản dịch...", "Đây là kết quả dịch:..."). Chỉ trả về kết quả dịch sạch theo đúng yêu cầu định dạng.
-                6. **Tuân thủ quy tắc bổ sung**: Nếu có thẻ `<user_custom_rules>` ở cuối, bạn PHẢI tuân thủ nghiêm ngặt các yêu cầu dịch bổ sung được khai báo bên trong thẻ đó.
+                5. **Đầu ra nghiêm ngặt**: Tuyệt đối không thêm bất kỳ văn bản giới thiệu, chú thích ngoài lề hay lời thoại dẫn dắt nào của AI (như "Dưới đây là bản dịch...", "Đây là kết quả dịch:..."). Chỉ trả về kết quả dịch sạch theo đúng yêu cầu định dạng.$rule6Vi
                 </rules>
                 
                 $fewShotVi
@@ -351,6 +350,10 @@ class GeminiManager {
                 """.trimIndent()
             }
 
+            val rule6Zh = if (hasCustom) {
+                "\n6. **遵守附加规则**:\n${customInstructions.trim()}"
+            } else ""
+
             systemInstruction = """
                 <role>
                 您是一个智能网页噪点提取和文学翻译专家。
@@ -364,8 +367,7 @@ class GeminiManager {
                    - 读者无关评论或非主体文字。
                 3. **高质量翻译**: 将净化后的主体内容从源语言 ($srcTextZh) 翻译为目标语言 ($targetLang)，匹配目标文体的专业特点，使行文自然流畅。
                 4. **保留结构**: 保留段落结构（使用空行 \n\n 明确分隔）。
-                5. **无额外输出**: 绝对不要包含任何介绍性或解释性文本（例如“以下是翻译内容...”）。仅返回符合格式要求的翻译核心内容。
-                6. **遵守附加规则**: 如果底部存在 `<user_custom_rules>` 标签，您必须严格遵守该标签内定义的所有附加翻译说明。
+                5. **无额外输出**: 绝对不要包含任何介绍性或解释性文本（例如“以下是翻译内容...”）。仅返回符合格式要求的翻译核心内容。$rule6Zh
                 </rules>
                 
                 $fewShotZh
@@ -415,6 +417,10 @@ class GeminiManager {
                 """.trimIndent()
             }
 
+            val rule6En = if (hasCustom) {
+                "\n6. **Adhere to custom rules**:\n${customInstructions.trim()}"
+            } else ""
+
             systemInstruction = """
                 <role>
                 You are a professional webpage content extractor and literary translator.
@@ -428,19 +434,15 @@ class GeminiManager {
                    - Irrelevant comments or non-main text.
                 3. **High-Quality Translation**: Translate the cleaned core content from the source language ($srcTextEn) into the target language ($targetLang) in a natural, smooth, and fluent manner, matching the target language's literary style.
                 4. **Preserve Paragraph Structure**: Keep the original paragraph structure (separate paragraphs by empty lines \n\n).
-                5. **Strict Output Formatting**: Do NOT include any introductory or explanatory text (such as "Here is the translation..."). Only return the clean translation matching the required format.
-                6. **Adhere to Custom Rules**: If the `<user_custom_rules>` tag is present at the bottom, you MUST strictly adhere to the additional translation instructions defined inside it.
+                5. **Strict Output Formatting**: Do NOT include any introductory or explanatory text (such as "Here is the translation..."). Only return the clean translation matching the required format.$rule6En
                 </rules>
                 
                 $fewShotEn
             """.trimIndent()
         }
 
-        // Apply Custom Rules and Disclaimer
+        // Apply Disclaimer
         var finalPrompt = systemInstruction
-        if (hasCustom) {
-            finalPrompt += "\n\n$customPart"
-        }
         if (hasDisclaimer) {
             finalPrompt = "$disclaimerPart\n\n$finalPrompt"
         }

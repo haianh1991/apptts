@@ -1,7 +1,7 @@
 {
-  "versionCode": 27,
-  "versionName": "1.5.3",
+  "versionCode": 28,
+  "versionName": "1.5.4",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.5.3.apk",
-  "releaseNotes": "Cập nhật v1.5.3: Hỗ trợ tự nhập/chỉnh sửa nhãn (label) cho các trang đánh dấu (bookmark) khi thêm mới hoặc từ danh sách đã lưu."
+  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.5.4.apk",
+  "releaseNotes": "Cập nhật v1.5.4: Tối ưu hóa cấu trúc và vị trí của các quy tắc tùy chọn (user_custom_rules) trực tiếp vào danh sách chỉ thị hệ thống của Gemini để tăng hiệu quả tuân thủ các quy tắc dịch thuật cá nhân hóa."
 }
