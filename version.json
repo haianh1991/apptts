@@ -1,7 +1,7 @@
 {
-  "versionCode": 29,
-  "versionName": "1.6.0",
+  "versionCode": 30,
+  "versionName": "1.6.1",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.0/WebAITransTTS_v1.6.0.apk",
-  "releaseNotes": "Cập nhật v1.6.0: Tích hợp NVIDIA NIM / DeepSeek API (deepseek-v4-pro, deepseek-r1, deepseek-v3). Thêm lựa chọn Nhà cung cấp AI và thẻ Cấu hình NVIDIA NIM linh hoạt trong Cài đặt."
+  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.1/WebAITransTTS_v1.6.1.apk",
+  "releaseNotes": "Cập nhật v1.6.1: Sửa lỗi thiếu tham số apiProvider/baseUrl khiến ứng dụng gọi nhầm vào SDK Gemini khi chọn NVIDIA NIM API."
 }

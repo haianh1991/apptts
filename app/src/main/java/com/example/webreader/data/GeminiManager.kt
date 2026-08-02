@@ -1063,7 +1063,9 @@ class GeminiManager {
                 title = title,
                 systemInstructionWithTitle = systemInstructionWithTitle,
                 systemInstructionStandard = systemInstructionStandard,
-                chunkInfo = chunkInfo
+                chunkInfo = chunkInfo,
+                apiProvider = apiProvider,
+                baseUrl = baseUrl
             )
         }
 
