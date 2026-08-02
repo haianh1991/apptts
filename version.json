@@ -1,7 +1,7 @@
 {
-  "versionCode": 31,
-  "versionName": "1.6.2",
+  "versionCode": 32,
+  "versionName": "1.6.3",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.2/WebAITransTTS_v1.6.2.apk",
-  "releaseNotes": "Cập nhật v1.6.2: Chuẩn hóa tự động ngắt đoạn văn (đổi dấu xuống dòng đơn thành xuống dòng kép \\n\\n) và lọc bỏ các thẻ suy luận <think> khi sử dụng NVIDIA NIM / DeepSeek API."
+  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.3/WebAITransTTS_v1.6.3.apk",
+  "releaseNotes": "Cập nhật v1.6.3: Thêm mô hình deepseek-ai/deepseek-v4-flash. Tăng cường khả năng tự động tách đoạn văn đối với các kiểu thụt lề Hán tự \\u3000, &emsp;, &nbsp;, thẻ HTML ngắt dòng và khoảng trắng đặc thù của NVIDIA DeepSeek."
 }

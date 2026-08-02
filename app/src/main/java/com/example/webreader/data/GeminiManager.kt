@@ -299,7 +299,7 @@ class GeminiManager {
                    - Các quảng cáo xen kẽ giữa các câu (ví dụ: thẻ script quảng cáo như `<script>loadAdv(5,0);</script>`).
                    - Các bình luận bên lề của độc giả hoặc quảng cáo bằng chữ khác không liên quan đến cốt truyện chính.
                 3. **Dịch văn học**: Dịch nội dung chính vừa lọc được từ ngôn ngữ gốc ($srcTextVi) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, trôi chảy, đúng ngữ cảnh văn học phong cách truyện chữ. Sử dụng từ Hán-Việt mượt mà, xưng hô phù hợp bối cảnh nhân vật.
-                4. **Giữ nguyên định dạng**: Giữ nguyên cấu trúc các phân đoạn gốc (phân tách các đoạn văn bằng các dòng trống \n\n).
+                4. **Giữ nguyên định dạng đoạn văn**: BẮT BUỘC phân tách rõ ràng từng đoạn văn bằng hai dấu xuống dòng (\n\n). Không được gộp dán liền tất cả các đoạn văn thành một khối văn bản duy nhất.
                 5. **Đầu ra nghiêm ngặt**: Tuyệt đối không thêm bất kỳ văn bản giới thiệu, chú thích ngoài lề hay lời thoại dẫn dắt nào của AI (như "Dưới đây là bản dịch...", "Đây là kết quả dịch:..."). Chỉ trả về kết quả dịch sạch theo đúng yêu cầu định dạng.$rule6Vi
                 </rules>
                 
@@ -366,7 +366,7 @@ class GeminiManager {
                    - 广告代码或内嵌广告脚本（例如：`<script>loadAdv(5,0);</script>`）。
                    - 读者无关评论或非主体文字。
                 3. **高质量翻译**: 将净化后的主体内容从源语言 ($srcTextZh) 翻译为目标语言 ($targetLang)，匹配目标文体的专业特点，使行文自然流畅。
-                4. **保留结构**: 保留段落结构（使用空行 \n\n 明确分隔）。
+                4. **保留段落结构**: 必须明确使用两个换行符 (\n\n) 分隔每一个段落。绝对不要将所有段落合并为一个长文本块。
                 5. **无额外输出**: 绝对不要包含任何介绍性或解释性文本（例如“以下是翻译内容...”）。仅返回符合格式要求的翻译核心内容。$rule6Zh
                 </rules>
                 
@@ -433,7 +433,7 @@ class GeminiManager {
                    - In-between advertisements and script tags (e.g., `<script>loadAdv(5,0);</script>`).
                    - Irrelevant comments or non-main text.
                 3. **High-Quality Translation**: Translate the cleaned core content from the source language ($srcTextEn) into the target language ($targetLang) in a natural, smooth, and fluent manner, matching the target language's literary style.
-                4. **Preserve Paragraph Structure**: Keep the original paragraph structure (separate paragraphs by empty lines \n\n).
+                4. **Preserve Paragraph Structure**: MUST clearly separate each paragraph with two newlines (\n\n). Never merge paragraphs into a single solid block of text.
                 5. **Strict Output Formatting**: Do NOT include any introductory or explanatory text (such as "Here is the translation..."). Only return the clean translation matching the required format.$rule6En
                 </rules>
                 
@@ -841,11 +841,27 @@ class GeminiManager {
                 ""
             }
         }
-        // Chuẩn hóa 3+ dấu xuống dòng thành 2 dấu xuống dòng (\n\n)
+        if (clean.isEmpty()) return ""
+
+        // 1. Chuyển đổi các thẻ ngắt dòng/đoạn văn HTML (<br>, <p>, </p>) thành \n\n
+        clean = clean.replace(Regex("(?i)<br\\s*/?>|</?p>"), "\n\n")
+
+        // 2. Chuyển đổi các khoảng trắng thụt lề Hán tự/HTML (&emsp;, &nbsp;, \u3000) thành \n\n
+        clean = clean.replace(Regex("(?:&emsp;|&nbsp;|\\u3000){1,}"), "\n\n")
+
+        // 3. Nếu văn bản không có \n\n nhưng có \n, đổi \n thành \n\n
+        if (!clean.contains("\n\n") && clean.contains("\n")) {
+            clean = clean.replace(Regex("(?<!\r?\n)\r?\n(?!\r?\n)"), "\n\n")
+        }
+
+        // 4. Nếu hoàn toàn không có dấu xuống dòng \n, tách đoạn theo khoảng trắng thụt lề (2+ spaces)
+        if (!clean.contains("\n")) {
+            clean = clean.replace(Regex(" {2,}"), "\n\n")
+        }
+
+        // 5. Chuẩn hóa 3+ dấu xuống dòng thành 2 dấu xuống dòng (\n\n)
         clean = clean.replace(Regex("(\r?\n){3,}"), "\n\n")
-        // Tự động chuyển các dấu xuống dòng đơn giữa các câu/đoạn thành 2 dấu xuống dòng (\n\n) để phân tách đoạn chuẩn
-        clean = clean.replace(Regex("(?<!\r?\n)\r?\n(?!\r?\n)"), "\n\n")
-        return clean
+        return clean.trim()
     }
 
     private fun callNvidiaOpenAiApiStream(

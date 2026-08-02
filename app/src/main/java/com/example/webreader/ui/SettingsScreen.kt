@@ -158,6 +158,7 @@ fun SettingsScreen(
     var isTargetDropdownExpanded by remember { mutableStateOf(false) }
 
     val nvidiaModels = listOf(
+        "deepseek-ai/deepseek-v4-flash",
         "deepseek-ai/deepseek-v4-pro",
         "deepseek-ai/deepseek-r1",
         "deepseek-ai/deepseek-v3",
