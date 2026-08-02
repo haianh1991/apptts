@@ -1,7 +1,7 @@
 {
-  "versionCode": 28,
-  "versionName": "1.5.4",
+  "versionCode": 29,
+  "versionName": "1.6.0",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/raw/main/WebAITransTTS_v1.5.4.apk",
-  "releaseNotes": "Cập nhật v1.5.4: Tối ưu hóa cấu trúc và vị trí của các quy tắc tùy chọn (user_custom_rules) trực tiếp vào danh sách chỉ thị hệ thống của Gemini để tăng hiệu quả tuân thủ các quy tắc dịch thuật cá nhân hóa."
+  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.0/WebAITransTTS_v1.6.0.apk",
+  "releaseNotes": "Cập nhật v1.6.0: Tích hợp NVIDIA NIM / DeepSeek API (deepseek-v4-pro, deepseek-r1, deepseek-v3). Thêm lựa chọn Nhà cung cấp AI và thẻ Cấu hình NVIDIA NIM linh hoạt trong Cài đặt."
 }
