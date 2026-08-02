@@ -6,6 +6,10 @@ import android.content.SharedPreferences
 class SettingsRepository(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("webreader_prefs", Context.MODE_PRIVATE)
 
+    var apiProvider: String
+        get() = prefs.getString("api_provider", "gemini") ?: "gemini"
+        set(value) = prefs.edit().putString("api_provider", value).apply()
+
     var geminiApiKey: String
         get() = prefs.getString("gemini_api_key", "") ?: ""
         set(value) = prefs.edit().putString("gemini_api_key", value).apply()
@@ -22,6 +26,27 @@ class SettingsRepository(context: Context) {
     var geminiModel: String
         get() = prefs.getString("gemini_model", "gemini-3.5-flash") ?: "gemini-3.5-flash"
         set(value) = prefs.edit().putString("gemini_model", value).apply()
+
+    var nvidiaApiKey: String
+        get() = prefs.getString("nvidia_api_key", "") ?: ""
+        set(value) = prefs.edit().putString("nvidia_api_key", value).apply()
+
+    val nvidiaApiKeys: List<String>
+        get() {
+            val raw = nvidiaApiKey
+            if (raw.isBlank()) return emptyList()
+            return raw.split(Regex("[,\n]"))
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+        }
+
+    var nvidiaBaseUrl: String
+        get() = prefs.getString("nvidia_base_url", "https://integrate.api.nvidia.com/v1") ?: "https://integrate.api.nvidia.com/v1"
+        set(value) = prefs.edit().putString("nvidia_base_url", value).apply()
+
+    var nvidiaModel: String
+        get() = prefs.getString("nvidia_model", "deepseek-ai/deepseek-v4-pro") ?: "deepseek-ai/deepseek-v4-pro"
+        set(value) = prefs.edit().putString("nvidia_model", value).apply()
 
     var ttsSpeed: Float
         get() = prefs.getFloat("tts_speed", 1.0f)

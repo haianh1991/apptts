@@ -40,12 +40,23 @@ interface AppStrings {
     val accountNoEmail: String
     val accountLogoutButton: String
     val accountLoginSyncPrompt: String
+    val apiProviderCardTitle: String
+    val apiProviderLabel: String
+    val apiProviderGemini: String
+    val apiProviderNvidia: String
     val geminiCardTitle: String
     val geminiApiKeyLabel: String
     val geminiApiKeyPlaceholder: String
     val geminiApiKeyInfo1: String
     val geminiApiKeyInfo2: String
     val geminiModelLabel: String
+    val nvidiaCardTitle: String
+    val nvidiaApiKeyLabel: String
+    val nvidiaApiKeyPlaceholder: String
+    val nvidiaApiKeyInfo: String
+    val nvidiaBaseUrlLabel: String
+    val nvidiaBaseUrlPlaceholder: String
+    val nvidiaModelLabel: String
     val transCardTitle: String
     val transSourceLabel: String
     val transTargetLabel: String
@@ -238,12 +249,23 @@ class ViAppStrings : AppStrings {
     override val accountNoEmail = "Không có email"
     override val accountLogoutButton = "Đăng xuất tài khoản"
     override val accountLoginSyncPrompt = "Đăng nhập bằng Google để đồng bộ cài đặt và theo dõi quyền lợi người dùng."
+    override val apiProviderCardTitle = "Nhà cung cấp API Dịch thuật"
+    override val apiProviderLabel = "Chọn Engine AI"
+    override val apiProviderGemini = "Google Gemini"
+    override val apiProviderNvidia = "NVIDIA NIM / DeepSeek API"
     override val geminiCardTitle = "Cấu hình Gemini API"
     override val geminiApiKeyLabel = "Gemini API Key"
     override val geminiApiKeyPlaceholder = "Dán các API key tại đây, cách nhau bởi dấu phẩy hoặc dòng mới"
     override val geminiApiKeyInfo1 = "Hỗ trợ nhiều khóa API để tự động xoay vòng khi có lỗi."
     override val geminiApiKeyInfo2 = "Lấy khóa API miễn phí từ Google AI Studio. Có thể dán danh sách khóa cách nhau bởi dấu phẩy hoặc ngắt dòng."
     override val geminiModelLabel = "Mô hình AI"
+    override val nvidiaCardTitle = "Cấu hình NVIDIA NIM / DeepSeek API"
+    override val nvidiaApiKeyLabel = "NVIDIA API Key (nvapi-...)"
+    override val nvidiaApiKeyPlaceholder = "Dán các API Key tại đây, cách nhau bởi dấu phẩy hoặc ngắt dòng"
+    override val nvidiaApiKeyInfo = "Lấy API Key miễn phí từ build.nvidia.com. Hỗ trợ dán danh sách key để tự động xoay vòng."
+    override val nvidiaBaseUrlLabel = "Endpoint Base URL"
+    override val nvidiaBaseUrlPlaceholder = "https://integrate.api.nvidia.com/v1"
+    override val nvidiaModelLabel = "Mô hình AI (Model)"
     override val transCardTitle = "Cấu hình Dịch thuật"
     override val transSourceLabel = "Ngôn ngữ nguồn"
     override val transTargetLabel = "Ngôn ngữ đích"
@@ -434,12 +456,23 @@ class EnAppStrings : AppStrings {
     override val accountNoEmail = "No email provided"
     override val accountLogoutButton = "Sign Out"
     override val accountLoginSyncPrompt = "Sign in with Google to sync settings and manage user benefits."
+    override val apiProviderCardTitle = "AI Translation Provider"
+    override val apiProviderLabel = "Select AI Engine"
+    override val apiProviderGemini = "Google Gemini"
+    override val apiProviderNvidia = "NVIDIA NIM / DeepSeek API"
     override val geminiCardTitle = "Gemini API Configuration"
     override val geminiApiKeyLabel = "Gemini API Key"
     override val geminiApiKeyPlaceholder = "Paste your API keys here, separated by commas or newlines"
     override val geminiApiKeyInfo1 = "Supports multiple API keys for automatic failover rotation."
     override val geminiApiKeyInfo2 = "Get a free API key from Google AI Studio. You can paste a list separated by commas or line breaks."
     override val geminiModelLabel = "AI Model"
+    override val nvidiaCardTitle = "NVIDIA NIM / DeepSeek API Config"
+    override val nvidiaApiKeyLabel = "NVIDIA API Key (nvapi-...)"
+    override val nvidiaApiKeyPlaceholder = "Paste your API keys here, separated by commas or newlines"
+    override val nvidiaApiKeyInfo = "Get your API Key from build.nvidia.com. Supports multiple keys for rotation."
+    override val nvidiaBaseUrlLabel = "Endpoint Base URL"
+    override val nvidiaBaseUrlPlaceholder = "https://integrate.api.nvidia.com/v1"
+    override val nvidiaModelLabel = "AI Model"
     override val transCardTitle = "Translation Settings"
     override val transSourceLabel = "Source Language"
     override val transTargetLabel = "Target Language"
@@ -630,12 +663,23 @@ class ZhAppStrings : AppStrings {
     override val accountNoEmail = "未提供电子邮箱"
     override val accountLogoutButton = "退出登录"
     override val accountLoginSyncPrompt = "使用 Google 登录以同步设置并管理用户权益。"
+    override val apiProviderCardTitle = "AI 翻译服务商"
+    override val apiProviderLabel = "选择 AI 引擎"
+    override val apiProviderGemini = "Google Gemini"
+    override val apiProviderNvidia = "NVIDIA NIM / DeepSeek API"
     override val geminiCardTitle = "Gemini API 配置"
     override val geminiApiKeyLabel = "Gemini API Key"
     override val geminiApiKeyPlaceholder = "在此处粘贴您的 API Key，以逗号或换行符分隔"
     override val geminiApiKeyInfo1 = "支持多个 API Key，以在出错时自动轮换。"
     override val geminiApiKeyInfo2 = "从 Google AI Studio 获取免费的 API Key。您可以粘贴以逗号或换行符分隔的密钥列表。"
     override val geminiModelLabel = "AI 模型"
+    override val nvidiaCardTitle = "NVIDIA NIM / DeepSeek API 配置"
+    override val nvidiaApiKeyLabel = "NVIDIA API Key (nvapi-...)"
+    override val nvidiaApiKeyPlaceholder = "在此处粘贴 API Key，以逗号或换行符分隔"
+    override val nvidiaApiKeyInfo = "在 build.nvidia.com 获取 API Key。支持输入多个 Key 自动轮询。"
+    override val nvidiaBaseUrlLabel = "Endpoint Base URL"
+    override val nvidiaBaseUrlPlaceholder = "https://integrate.api.nvidia.com/v1"
+    override val nvidiaModelLabel = "AI 模型"
     override val transCardTitle = "翻译配置"
     override val transSourceLabel = "源语言"
     override val transTargetLabel = "目标语言"

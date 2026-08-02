@@ -328,12 +328,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun translateWebpage(text: String, title: String, url: String, folderId: String? = null) {
-        if (settings.geminiApiKeys.isEmpty()) {
+        val isNvidiaCheck = settings.apiProvider == "nvidia"
+        val providerKeys = if (isNvidiaCheck) settings.nvidiaApiKeys else settings.geminiApiKeys
+        if (providerKeys.isEmpty()) {
             val errMsg = "Vui lòng nhập API Key trong phần Cài đặt để dịch trang web."
             _errorMessage.value = errMsg
             _showReaderSheet.value = true // Show reader sheet to display the error and prompt user
             
-            val logSteps = mutableListOf("Lỗi khởi tạo: Danh sách khóa API Gemini trống. Vui lòng thiết lập trong Cài đặt.")
+            val logSteps = mutableListOf("Lỗi khởi tạo: Danh sách khóa API trống. Vui lòng thiết lập trong Cài đặt.")
             val newLog = TransactionLog(
                 type = "Đọc ngay",
                 title = title,
@@ -365,13 +367,17 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             val logSteps = mutableListOf("Khởi chạy tiến trình dịch (gộp tiêu đề và nội dung)...")
             var currentTitle = title
 
+            val isNvidia = settings.apiProvider == "nvidia"
+            val currentApiKeys = if (isNvidia) settings.nvidiaApiKeys else settings.geminiApiKeys
+            val currentModel = if (isNvidia) settings.nvidiaModel else settings.geminiModel
+
             val initialLog = TransactionLog(
                 id = logId,
                 type = "Đọc ngay",
                 title = currentTitle,
                 url = url,
                 status = "Đang chạy",
-                usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
+                usedApiKeys = currentApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
                 steps = logSteps.toList(),
                 geminiResponse = null,
                 errorMessage = null
@@ -381,8 +387,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
             val result = geminiManager.translateContent(
                 text = text,
-                apiKeys = settings.geminiApiKeys,
-                modelName = settings.geminiModel,
+                apiKeys = currentApiKeys,
+                modelName = currentModel,
                 sourceLang = settings.sourceLanguage,
                 targetLang = settings.targetLanguage,
                 customInstructions = settings.customInstructions,
@@ -391,6 +397,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 title = title,
                 uiLanguage = settings.appDisplayLanguage,
                 maxWordCount = settings.chunkWordCount,
+                apiProvider = settings.apiProvider,
+                baseUrl = settings.nvidiaBaseUrl,
                 onStepAdded = { step ->
                     _foregroundTranslationStep.value = step
                     _foregroundTranslationSteps.value = _foregroundTranslationSteps.value + step
@@ -542,12 +550,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun translateAndAddToQueue(text: String, title: String, url: String, folderId: String? = null) {
-        if (settings.geminiApiKeys.isEmpty()) {
+        val isNvidiaCheck = settings.apiProvider == "nvidia"
+        val providerKeys = if (isNvidiaCheck) settings.nvidiaApiKeys else settings.geminiApiKeys
+        if (providerKeys.isEmpty()) {
             val errMsg = "Vui lòng nhập API Key trong phần Cài đặt để dịch trang web."
             _errorMessage.value = errMsg
             _showReaderSheet.value = true
             
-            val logSteps = mutableListOf("Lỗi khởi tạo: Danh sách khóa API Gemini trống. Vui lòng thiết lập trong Cài đặt.")
+            val logSteps = mutableListOf("Lỗi khởi tạo: Danh sách khóa API trống. Vui lòng thiết lập trong Cài đặt.")
             val newLog = TransactionLog(
                 type = "Hàng chờ",
                 title = title,
@@ -629,13 +639,17 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
 
         var currentTitle = title
+        val isNvidia = settings.apiProvider == "nvidia"
+        val currentApiKeys = if (isNvidia) settings.nvidiaApiKeys else settings.geminiApiKeys
+        val currentModel = if (isNvidia) settings.nvidiaModel else settings.geminiModel
+
         val initialLog = TransactionLog(
             id = logId,
             type = "Hàng chờ",
             title = currentTitle,
             url = url,
             status = "Đang chạy",
-            usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
+            usedApiKeys = currentApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
             steps = logSteps.toList(),
             geminiResponse = null,
             errorMessage = null
@@ -645,8 +659,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
         val result = geminiManager.translateContent(
             text = text,
-            apiKeys = settings.geminiApiKeys,
-            modelName = settings.geminiModel,
+            apiKeys = currentApiKeys,
+            modelName = currentModel,
             sourceLang = settings.sourceLanguage,
             targetLang = settings.targetLanguage,
             customInstructions = settings.customInstructions,
@@ -655,6 +669,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             title = title,
             uiLanguage = settings.appDisplayLanguage,
             maxWordCount = settings.chunkWordCount,
+            apiProvider = settings.apiProvider,
+            baseUrl = settings.nvidiaBaseUrl,
             onStepAdded = { step ->
                 _activeTranslations.value = _activeTranslations.value.map {
                     if (it.id == logId) it.copy(currentStep = step) else it
@@ -913,7 +929,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun retryTranslation(job: ActiveTranslation) {
-        if (settings.geminiApiKeys.isEmpty()) {
+        val isNvidiaCheck = settings.apiProvider == "nvidia"
+        val providerKeys = if (isNvidiaCheck) settings.nvidiaApiKeys else settings.geminiApiKeys
+        if (providerKeys.isEmpty()) {
             val errMsg = "Vui lòng nhập API Key trong phần Cài đặt để dịch trang web."
             _activeTranslations.value = _activeTranslations.value.map {
                 if (it.id == job.id) it.copy(
@@ -922,7 +940,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 ) else it
             }
             
-            val logSteps = mutableListOf("Lỗi khởi tạo: Danh sách khóa API Gemini trống. Vui lòng thiết lập trong Cài đặt.")
+            val logSteps = mutableListOf("Lỗi khởi tạo: Danh sách khóa API trống. Vui lòng thiết lập trong Cài đặt.")
             val newLog = TransactionLog(
                 type = "Hàng chờ",
                 title = job.title,
@@ -950,13 +968,17 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             val logSteps = mutableListOf("Bắt đầu thử lại dịch thuật (gộp tiêu đề và nội dung)...")
             var currentTitle = job.title
 
+            val isNvidia = settings.apiProvider == "nvidia"
+            val currentApiKeys = if (isNvidia) settings.nvidiaApiKeys else settings.geminiApiKeys
+            val currentModel = if (isNvidia) settings.nvidiaModel else settings.geminiModel
+
             val initialLog = TransactionLog(
                 id = logId,
                 type = "Hàng chờ",
                 title = currentTitle,
                 url = job.url,
                 status = "Đang chạy",
-                usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
+                usedApiKeys = currentApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
                 steps = logSteps.toList(),
                 geminiResponse = null,
                 errorMessage = null
@@ -966,8 +988,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
             val result = geminiManager.translateContent(
                 text = job.text,
-                apiKeys = settings.geminiApiKeys,
-                modelName = settings.geminiModel,
+                apiKeys = currentApiKeys,
+                modelName = currentModel,
                 sourceLang = settings.sourceLanguage,
                 targetLang = settings.targetLanguage,
                 customInstructions = settings.customInstructions,
@@ -976,6 +998,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 title = job.title,
                 uiLanguage = settings.appDisplayLanguage,
                 maxWordCount = settings.chunkWordCount,
+                apiProvider = settings.apiProvider,
+                baseUrl = settings.nvidiaBaseUrl,
                 onStepAdded = { step ->
                     _activeTranslations.value = _activeTranslations.value.map {
                         if (it.id == job.id) it.copy(currentStep = step) else it

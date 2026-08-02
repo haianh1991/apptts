@@ -469,7 +469,9 @@ class GeminiManager {
         systemInstructionWithTitle: String,
         systemInstructionStandard: String,
         chunkInfo: String,
-        depth: Int = 0
+        depth: Int = 0,
+        apiProvider: String = "gemini",
+        baseUrl: String = "https://integrate.api.nvidia.com/v1"
     ): Boolean = withContext(Dispatchers.IO) {
         fun addStep(step: String) {
             logSteps.add(step)
@@ -512,16 +514,6 @@ class GeminiManager {
             addStep(stepMsg)
 
             try {
-                val generativeModel = GenerativeModel(
-                    modelName = modelName,
-                    apiKey = apiKey,
-                    requestOptions = RequestOptions(timeout = 180.seconds),
-                    safetySettings = safetySettings,
-                    systemInstruction = content {
-                        text(if (isFirstChunk && !title.isNullOrBlank()) systemInstructionWithTitle else systemInstructionStandard)
-                    }
-                )
-
                 val prompt = if (isFirstChunk && !title.isNullOrBlank()) {
                     when (uiLanguage) {
                         "vi" -> {
@@ -585,92 +577,112 @@ class GeminiManager {
                 }
 
                 val sysInstruction = if (isFirstChunk && !title.isNullOrBlank()) systemInstructionWithTitle else systemInstructionStandard
-                val previewPromptText = if (prompt.length > 300) {
-                    prompt.take(150) + "\n...\n[Đã rút ngắn nội dung dài: ${prompt.length} ký tự]\n...\n" + prompt.takeLast(100)
+
+                if (apiProvider == "nvidia" || apiProvider == "openai") {
+                    callNvidiaOpenAiApiStream(
+                        apiKey = apiKey,
+                        baseUrl = baseUrl,
+                        modelName = modelName,
+                        sysInstruction = sysInstruction,
+                        prompt = prompt,
+                        node = node,
+                        onContentUpdated = onContentUpdated,
+                        addStep = ::addStep
+                    )
                 } else {
-                    prompt
-                }
-                
-                val apiPayloadPreview = """
-                {
-                  "contents": [
-                    {
-                      "parts": [
-                        {
-                          "text": ${escapeJsonString(previewPromptText)}
+                    val generativeModel = GenerativeModel(
+                        modelName = modelName,
+                        apiKey = apiKey,
+                        requestOptions = RequestOptions(timeout = 180.seconds),
+                        safetySettings = safetySettings,
+                        systemInstruction = content {
+                            text(sysInstruction)
                         }
+                    )
+
+                    val previewPromptText = if (prompt.length > 300) {
+                        prompt.take(150) + "\n...\n[Đã rút ngắn nội dung dài: ${prompt.length} ký tự]\n...\n" + prompt.takeLast(100)
+                    } else {
+                        prompt
+                    }
+                    
+                    val apiPayloadPreview = """
+                    {
+                      "contents": [
+                        {
+                          "parts": [
+                            {
+                              "text": ${escapeJsonString(previewPromptText)}
+                            }
+                          ]
+                        }
+                      ],
+                      "systemInstruction": {
+                        "parts": [
+                          {
+                            "text": ${escapeJsonString(sysInstruction)}
+                          }
+                        ]
+                      },
+                      "generationConfig": {
+                        "temperature": 0.3,
+                        "topP": 0.95
+                      },
+                      "safetySettings": [
+                        { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE" },
+                        { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE" },
+                        { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE" },
+                        { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE" }
                       ]
                     }
-                  ],
-                  "systemInstruction": {
-                    "parts": [
-                      {
-                        "text": ${escapeJsonString(sysInstruction)}
-                      }
-                    ]
-                  },
-                  "generationConfig": {
-                    "temperature": 0.3,
-                    "topP": 0.95
-                  },
-                  "safetySettings": [
-                    { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE" },
-                    { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE" },
-                    { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE" },
-                    { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE" }
-                  ]
-                }
-                """.trimIndent()
-                addStep("[API REQUEST PAYLOAD]:\n$apiPayloadPreview")
+                    """.trimIndent()
+                    addStep("[API REQUEST PAYLOAD]:\n$apiPayloadPreview")
 
-                val responseStream = generativeModel.generateContentStream(prompt)
-                val chunkBuilder = StringBuilder()
-                var hasSafetyFinishReason = false
-                
-                responseStream.collect { response ->
-                    val candidate = response.candidates.firstOrNull()
-                    if (candidate?.finishReason?.name == "SAFETY" || candidate?.finishReason?.name == "PROHIBITED_CONTENT") {
-                        hasSafetyFinishReason = true
-                        throw Exception("Gemini API chặn nội dung do an toàn (finishReason: ${candidate.finishReason?.name})")
+                    val responseStream = generativeModel.generateContentStream(prompt)
+                    val chunkBuilder = StringBuilder()
+                    var hasSafetyFinishReason = false
+                    
+                    responseStream.collect { response ->
+                        val candidate = response.candidates.firstOrNull()
+                        if (candidate?.finishReason?.name == "SAFETY" || candidate?.finishReason?.name == "PROHIBITED_CONTENT") {
+                            hasSafetyFinishReason = true
+                            throw Exception("Gemini API chặn nội dung do an toàn (finishReason: ${candidate.finishReason?.name})")
+                        }
+                        val chunkText = response.text
+                        if (chunkText != null) {
+                            chunkBuilder.append(chunkText)
+                            node.translatedText = chunkBuilder.toString()
+                            onContentUpdated?.invoke()
+                        }
                     }
-                    val chunkText = response.text
-                    if (chunkText != null) {
-                        chunkBuilder.append(chunkText)
-                        node.translatedText = chunkBuilder.toString()
-                        onContentUpdated?.invoke()
+
+                    if (hasSafetyFinishReason) {
+                        throw Exception("Gemini API chặn nội dung do an toàn (SAFETY finishReason)")
                     }
-                }
 
-                if (hasSafetyFinishReason) {
-                    throw Exception("Gemini API chặn nội dung do an toàn (SAFETY finishReason)")
-                }
-
-                val translatedText = chunkBuilder.toString()
-                if (translatedText.isNotEmpty()) {
-                    node.translatedText = translatedText
-                    success = true
-                    currentKeyIndexRef[0] = originalIndex
-                    val successMsg = if (depth > 0) {
-                        "Dịch thành công phần con $chunkInfo với API Key số $keyNum ($keySnippet)."
+                    val translatedText = chunkBuilder.toString()
+                    if (translatedText.isNotEmpty()) {
+                        node.translatedText = translatedText
                     } else {
-                        "Dịch thành công $chunkInfo với API Key số $keyNum ($keySnippet)."
+                        throw Exception("Gemini API không trả về nội dung dịch.")
                     }
-                    addStep(successMsg)
-                    break
-                } else {
-                    throw Exception("Gemini API không trả về nội dung dịch.")
                 }
+
+                success = true
+                currentKeyIndexRef[0] = originalIndex
+                val successMsg = if (depth > 0) {
+                    "Dịch thành công phần con $chunkInfo với API Key số $keyNum ($keySnippet)."
+                } else {
+                    "Dịch thành công $chunkInfo với API Key số $keyNum ($keySnippet)."
+                }
+                addStep(successMsg)
+                break
             } catch (e: Exception) {
                 val detailedErr = getDetailedErrorMessage(e)
                 val isSafety = isSafetyError(e)
                 val isNetwork = isNetworkError(e)
                 val errText = detailedErr.lowercase()
-                val isQuota = errText.contains("429") || errText.contains("resource_exhausted") || errText.contains("quota")
-                val isPermissionDenied = errText.contains("403") || errText.contains("permission_denied") || errText.contains("permission denied") || errText.contains("api key")
-                val isNotFound = errText.contains("404") || errText.contains("not_found") || errText.contains("not found")
-                val isBadRequest = errText.contains("400") || errText.contains("invalid_argument") || errText.contains("failed_precondition") || errText.contains("failed precondition")
-                val isServerErr = errText.contains("500") || errText.contains("503") || errText.contains("504") || errText.contains("internal") || errText.contains("unavailable") || errText.contains("high demand")
-
+                
                 if (isNetwork) {
                     val errLabel = "Lỗi kết nối mạng (Internet/Timeout)"
                     addStep("Thất bại $chunkInfo với API Key số $keyNum ($keySnippet) [$errLabel]. Chi tiết: $detailedErr")
@@ -712,7 +724,9 @@ class GeminiManager {
                             systemInstructionWithTitle = systemInstructionWithTitle,
                             systemInstructionStandard = systemInstructionStandard,
                             chunkInfo = "$chunkInfo.1",
-                            depth = depth + 1
+                            depth = depth + 1,
+                            apiProvider = apiProvider,
+                            baseUrl = baseUrl
                         )
                         
                         val rightSuccess = translateChunkRecursive(
@@ -734,7 +748,9 @@ class GeminiManager {
                             systemInstructionWithTitle = systemInstructionWithTitle,
                             systemInstructionStandard = systemInstructionStandard,
                             chunkInfo = "$chunkInfo.2",
-                            depth = depth + 1
+                            depth = depth + 1,
+                            apiProvider = apiProvider,
+                            baseUrl = baseUrl
                         )
                         
                         success = leftSuccess && rightSuccess
@@ -744,76 +760,61 @@ class GeminiManager {
                         break // Break out of key attempt loop
                     }
                 } else {
-                    // 1. Phân tích giới hạn (limit) từ phản hồi để phân loại RPM/RPD
                     val limitRegex = Regex("limit:\\s*(\\d+)", RegexOption.IGNORE_CASE)
                     val limitMatch = limitRegex.find(errText)
                     val limitValue = limitMatch?.groupValues?.get(1)?.toIntOrNull()
 
-                    val isDailyQuota = isQuota && (
-                        errText.contains("daily") || 
+                    val isDailyQuota = errText.contains("daily") || 
                         errText.contains("per_day") || 
                         errText.contains("perday") || 
                         errText.contains("free_tier_requests_per_day") ||
                         (limitValue != null && limitValue == 20)
-                    )
                     
+                    val isQuota = errText.contains("429") || errText.contains("resource_exhausted") || errText.contains("quota")
+                    val isPermissionDenied = errText.contains("403") || errText.contains("permission_denied") || errText.contains("permission denied") || errText.contains("api key")
+                    val isNotFound = errText.contains("404") || errText.contains("not_found") || errText.contains("not found")
+                    val isBadRequest = errText.contains("400") || errText.contains("invalid_argument") || errText.contains("failed_precondition") || errText.contains("failed precondition")
+                    val isServerErr = errText.contains("500") || errText.contains("503") || errText.contains("504") || errText.contains("internal") || errText.contains("unavailable") || errText.contains("high demand")
+
                     val errLabel = when {
-                        isDailyQuota -> "Lỗi Hạn ngạch Ngày (RPD Quota Exceeded)"
-                        isQuota -> "Lỗi Hạn ngạch Phút (RPM Quota Exceeded)"
-                        isPermissionDenied -> "Lỗi Xác thực (Permission Denied)"
-                        isNotFound -> "Mô hình Không tìm thấy (Not Found)"
-                        isBadRequest -> "Yêu cầu Không hợp lệ (Bad Request/Precondition)"
-                        isServerErr -> "Lỗi Máy chủ (Server Error)"
-                        else -> "Lỗi kỹ thuật"
+                        isDailyQuota -> "Lỗi Giới hạn Hàng ngày (Daily Limit Exceeded)"
+                        isQuota -> "Lỗi Tốc độ Hạn ngạch (RPM/TPM Quota Exceeded)"
+                        isPermissionDenied -> "Lỗi Khóa API không hợp lệ (Forbidden/Invalid Key)"
+                        isNotFound -> "Lỗi Không tìm thấy mô hình (Model Not Found)"
+                        isBadRequest -> "Lỗi Yêu cầu không hợp lệ (Bad Request)"
+                        isServerErr -> "Lỗi Máy chủ Gemini/NVIDIA (Server Error)"
+                        else -> "Lỗi Dịch thuật"
                     }
-
-                    // 2. Tính toán thời gian chờ thử lại (Safety/Cooldown Timer)
-                    if (isQuota) {
-                        val retryRegex = Regex("Please retry in ([\\d.]+)\\s*s", RegexOption.IGNORE_CASE)
-                        val matchResult = retryRegex.find(errText)
-                        val exactCooldownMs = if (matchResult != null) {
-                            val seconds = matchResult.groupValues[1].toDoubleOrNull()
-                            if (seconds != null) {
-                                (seconds * 1000).toLong() + 2000L // 2 giây buffer
-                            } else null
-                        } else null
-
-                        val modelKey = "$apiKey:$modelName"
-
-                        if (isDailyQuota) {
-                            val cooldownSec = getSecondsUntilDailyReset()
-                            keyCooldowns[modelKey] = System.currentTimeMillis() + (cooldownSec * 1000L)
-                            val hr = cooldownSec / 3600
-                            val min = (cooldownSec % 3600) / 60
-                            val durationStr = if (hr > 0) "${hr} giờ ${min} phút" else "${min} phút"
-                            addStep("API Key số $keyNum ($keySnippet) bị khóa đối với mô hình $modelName cho đến khi tự động reset lúc 15:00 (còn khoảng $durationStr) do hết hạn ngạch ngày (RPD).")
-                        } else if (exactCooldownMs != null) {
-                            keyCooldowns[modelKey] = System.currentTimeMillis() + exactCooldownMs
-                            val durationSec = exactCooldownMs / 1000
-                            addStep("API Key số $keyNum ($keySnippet) bị tạm khóa đối với mô hình $modelName trong $durationSec giây (bộ đếm an toàn chờ reset hạn ngạch phút - RPM).")
-                        } else {
-                            keyCooldowns[modelKey] = System.currentTimeMillis() + 60000L
-                            addStep("API Key số $keyNum ($keySnippet) bị tạm khóa đối với mô hình $modelName trong 60 giây do vượt hạn ngạch phút (RPM).")
-                        }
+                    
+                    if (isDailyQuota) {
+                        val secondsRemaining = getSecondsUntilDailyReset()
+                        val cooldownUntil = now + (secondsRemaining * 1000L)
+                        keyCooldowns["$apiKey:$modelName"] = cooldownUntil
+                        val hours = secondsRemaining / 3600
+                        val mins = (secondsRemaining % 3600) / 60
+                        addStep("Thất bại $chunkInfo với API Key số $keyNum ($keySnippet) [$errLabel]. Tạm khóa API Key này cho mô hình $modelName trong ${hours}h ${mins}m (đến khi reset ngày mới). Chi tiết: $detailedErr")
+                    } else if (isQuota) {
+                        val cooldownUntil = now + 60_000L
+                        keyCooldowns["$apiKey:$modelName"] = cooldownUntil
+                        addStep("Thất bại $chunkInfo với API Key số $keyNum ($keySnippet) [$errLabel]. Tạm khóa API Key này cho mô hình $modelName trong 60 giây. Chi tiết: $detailedErr")
+                    } else if (isPermissionDenied || isNotFound || isBadRequest) {
+                        val cooldownUntil = now + 86400_000L
+                        keyCooldowns["$apiKey:$modelName"] = cooldownUntil
+                        addStep("Thất bại $chunkInfo với API Key số $keyNum ($keySnippet) [$errLabel]. Khóa API Key bị vô hiệu hóa 24h. Chi tiết: $detailedErr")
                     } else {
-                        // Không thiết lập bất kỳ Cooldown nào đối với lỗi xác thực (Auth/Permission) và lỗi máy chủ (Server Error).
-                        // Key này vẫn được giữ nguyên trạng thái hoạt động cho các phần/yêu cầu dịch sau.
+                        addStep("Thất bại $chunkInfo với API Key số $keyNum ($keySnippet) [$errLabel]. Chi tiết: $detailedErr")
                     }
-
-                    // 3. Ghi nhận chi tiết phản hồi API vào nhật ký
-                    addStep("Thất bại $chunkInfo với API Key số $keyNum ($keySnippet) [$errLabel]. Chi tiết phản hồi API:\n$detailedErr")
                     chunkErrors.add("[$keySnippet] [$errLabel]: $detailedErr")
                 }
             }
         }
 
         if (!success) {
-            val hasSafetyErr = chunkErrors.any { it.contains("Lỗi An toàn") }
-            val fallbackHeader = if (hasSafetyErr) {
+            val fallbackHeader = if (chunkErrors.any { it.lowercase().contains("daily") || it.lowercase().contains("hạn ngạch") || it.lowercase().contains("quota") }) {
                 when (uiLanguage) {
-                    "vi" -> "--- [Đoạn này bị bộ lọc Gemini API chặn dịch thuật do chính sách nội dung, hiển thị văn bản gốc] ---"
-                    "zh" -> "--- [该段落被 Gemini API 安全过滤器拦截，显示原文] ---"
-                    else -> "--- [This section was blocked by Gemini API safety filter, showing original text] ---"
+                    "vi" -> "--- [Lỗi hết hạn ngạch API, hiển thị văn bản gốc] ---"
+                    "zh" -> "--- [API 配额已用尽，显示原文] ---"
+                    else -> "--- [API Quota Exceeded, showing original text] ---"
                 }
             } else {
                 when (uiLanguage) {
@@ -830,6 +831,129 @@ class GeminiManager {
         return@withContext success
     }
 
+    private fun callNvidiaOpenAiApiStream(
+        apiKey: String,
+        baseUrl: String,
+        modelName: String,
+        sysInstruction: String,
+        prompt: String,
+        node: TranslationNode,
+        onContentUpdated: (() -> Unit)?,
+        addStep: (String) -> Unit
+    ) {
+        val cleanBaseUrl = baseUrl.trim().trimEnd('/')
+        val endpointUrl = if (cleanBaseUrl.endsWith("/chat/completions")) {
+            cleanBaseUrl
+        } else {
+            "$cleanBaseUrl/chat/completions"
+        }
+
+        val jsonPayload = """
+        {
+          "model": ${escapeJsonString(modelName)},
+          "messages": [
+            {
+              "role": "system",
+              "content": ${escapeJsonString(sysInstruction)}
+            },
+            {
+              "role": "user",
+              "content": ${escapeJsonString(prompt)}
+            }
+          ],
+          "temperature": 0.3,
+          "top_p": 0.95,
+          "stream": true
+        }
+        """.trimIndent()
+
+        val previewPromptText = if (prompt.length > 300) {
+            prompt.take(150) + "\n...\n[Đã rút ngắn nội dung dài: ${prompt.length} ký tự]\n...\n" + prompt.takeLast(100)
+        } else {
+            prompt
+        }
+
+        val apiPayloadPreview = """
+        {
+          "model": ${escapeJsonString(modelName)},
+          "messages": [
+            { "role": "system", "content": ${escapeJsonString(sysInstruction)} },
+            { "role": "user", "content": ${escapeJsonString(previewPromptText)} }
+          ],
+          "temperature": 0.3,
+          "top_p": 0.95,
+          "stream": true
+        }
+        """.trimIndent()
+
+        addStep("[API REQUEST PAYLOAD - NVIDIA NIM]:\nEndpoint: $endpointUrl\n$apiPayloadPreview")
+
+        val url = java.net.URL(endpointUrl)
+        val conn = url.openConnection() as java.net.HttpURLConnection
+        try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 30_000
+            conn.readTimeout = 180_000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            conn.setRequestProperty("Accept", "text/event-stream")
+            if (apiKey.isNotBlank()) {
+                conn.setRequestProperty("Authorization", "Bearer $apiKey")
+            }
+
+            conn.outputStream.use { os ->
+                os.write(jsonPayload.toByteArray(Charsets.UTF_8))
+                os.flush()
+            }
+
+            val responseCode = conn.responseCode
+            if (responseCode !in 200..299) {
+                val errorMsg = try {
+                    conn.errorStream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: "HTTP $responseCode"
+                } catch (e: Exception) {
+                    "HTTP $responseCode"
+                }
+                throw Exception("NVIDIA NIM API error (HTTP $responseCode): $errorMsg")
+            }
+
+            val chunkBuilder = StringBuilder()
+            conn.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+                var line: String?
+                while (reader.readLine().also { line = it } != null) {
+                    val currentLine = line?.trim() ?: continue
+                    if (currentLine.startsWith("data: ")) {
+                        val data = currentLine.substring(6).trim()
+                        if (data == "[DONE]") break
+                        try {
+                            val jsonObj = org.json.JSONObject(data)
+                            val choices = jsonObj.optJSONArray("choices")
+                            if (choices != null && choices.length() > 0) {
+                                val choice = choices.getJSONObject(0)
+                                val delta = choice.optJSONObject("delta")
+                                val contentChunk = delta?.optString("content", "")
+                                if (!contentChunk.isNullOrEmpty()) {
+                                    chunkBuilder.append(contentChunk)
+                                    node.translatedText = chunkBuilder.toString()
+                                    onContentUpdated?.invoke()
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // Ignore json parse error for partial lines
+                        }
+                    }
+                }
+            }
+
+            val resultText = chunkBuilder.toString()
+            if (resultText.isEmpty()) {
+                throw Exception("NVIDIA NIM API không trả về nội dung dịch.")
+            }
+            node.translatedText = resultText
+        } finally {
+            conn.disconnect()
+        }
+    }
+
     suspend fun translateContent(
         text: String,
         apiKeys: List<String>,
@@ -843,7 +967,9 @@ class GeminiManager {
         onStepAdded: ((String) -> Unit)? = null,
         onContentUpdated: ((String) -> Unit)? = null,
         uiLanguage: String = "vi",
-        maxWordCount: Int = 6000
+        maxWordCount: Int = 6000,
+        apiProvider: String = "gemini",
+        baseUrl: String = "https://integrate.api.nvidia.com/v1"
     ): Result<String> = withContext(Dispatchers.IO) {
         fun addStep(step: String) {
             logSteps.add(step)
@@ -851,7 +977,11 @@ class GeminiManager {
         }
 
         if (apiKeys.isEmpty()) {
-            val errMsg = "Danh sách khóa API Gemini trống. Vui lòng thiết lập trong Cài đặt."
+            val errMsg = if (apiProvider == "nvidia") {
+                "Danh sách khóa API NVIDIA NIM trống. Vui lòng thiết lập trong Cài đặt."
+            } else {
+                "Danh sách khóa API Gemini trống. Vui lòng thiết lập trong Cài đặt."
+            }
             addStep("Lỗi khởi tạo: $errMsg")
             return@withContext Result.failure(IllegalArgumentException(errMsg))
         }
@@ -862,9 +992,13 @@ class GeminiManager {
         }
         val chunks = splitTextIntoChunks(text, maxWordCount)
         val totalWords = countWords(text)
-        addStep("Khởi chạy tiến trình dịch thuật. Kích thước văn bản gốc: ${text.length} ký tự (khoảng $totalWords từ), chia thành ${chunks.size} phần.")
+        val providerName = if (apiProvider == "nvidia") "NVIDIA NIM / DeepSeek API" else "Google Gemini"
+        addStep("Khởi chạy tiến trình dịch thuật ($providerName). Kích thước văn bản gốc: ${text.length} ký tự (khoảng $totalWords từ), chia thành ${chunks.size} phần.")
         addStep("Ngôn ngữ dịch: $sourceLang -> $targetLang")
         addStep("Sử dụng mô hình AI: $modelName")
+        if (apiProvider == "nvidia") {
+            addStep("Endpoint Base URL: $baseUrl")
+        }
         
         val promptLangName = when (uiLanguage) {
             "vi" -> "Tiếng Việt"

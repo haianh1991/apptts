@@ -115,8 +115,12 @@ fun SettingsScreen(
     val appStrings = LocalAppStrings.current
     val displayLang by viewModel.appDisplayLanguage.collectAsState()
 
+    var apiProvider by remember { mutableStateOf(settings.apiProvider) }
     var apiKey by remember { mutableStateOf(settings.geminiApiKey) }
     var selectedModel by remember { mutableStateOf(settings.geminiModel) }
+    var nvidiaApiKey by remember { mutableStateOf(settings.nvidiaApiKey) }
+    var nvidiaBaseUrl by remember { mutableStateOf(settings.nvidiaBaseUrl) }
+    var nvidiaModel by remember { mutableStateOf(settings.nvidiaModel) }
     var ttsSpeed by remember { mutableFloatStateOf(settings.ttsSpeed) }
     var ttsPitch by remember { mutableFloatStateOf(settings.ttsPitch) }
     var selectedEngine by remember { mutableStateOf(settings.ttsEngine) }
@@ -145,10 +149,20 @@ fun SettingsScreen(
     }
 
     var apiKeyVisible by remember { mutableStateOf(false) }
+    var nvidiaApiKeyVisible by remember { mutableStateOf(false) }
+    var isProviderDropdownExpanded by remember { mutableStateOf(false) }
+    var isNvidiaModelDropdownExpanded by remember { mutableStateOf(false) }
     var isDropdownExpanded by remember { mutableStateOf(false) }
     var isEngineDropdownExpanded by remember { mutableStateOf(false) }
     var isSourceDropdownExpanded by remember { mutableStateOf(false) }
     var isTargetDropdownExpanded by remember { mutableStateOf(false) }
+
+    val nvidiaModels = listOf(
+        "deepseek-ai/deepseek-v4-pro",
+        "deepseek-ai/deepseek-r1",
+        "deepseek-ai/deepseek-v3",
+        "meta/llama-3.3-70b-instruct"
+    )
 
     val availableEngines = remember { viewModel.ttsManager.getAvailableTtsEngines() }
     val activeEngineLabel = availableEngines.find { it.name == selectedEngine }?.label 
@@ -417,7 +431,7 @@ fun SettingsScreen(
                 }
             }
 
-            // Card cấu hình Gemini API
+            // Card chọn Nhà cung cấp AI
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -427,47 +441,85 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = appStrings.geminiCardTitle,
+                        text = appStrings.apiProviderCardTitle,
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
                     )
 
-                    OutlinedTextField(
-                        value = apiKey,
-                        onValueChange = { apiKey = it },
-                        label = { Text(appStrings.geminiApiKeyLabel) },
-                        placeholder = { Text(appStrings.geminiApiKeyPlaceholder) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = false,
-                        maxLines = 4,
-                        visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
-                                Icon(
-                                    imageVector = if (apiKeyVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
-                                    contentDescription = if (apiKeyVisible) {
-                                        when (displayLang) {
-                                            "en" -> "Hide API Key"
-                                            "zh" -> "隐藏 API Key"
-                                            else -> "Ẩn API Key"
-                                        }
-                                    } else {
-                                        when (displayLang) {
-                                            "en" -> "Show API Key"
-                                            "zh" -> "显示 API Key"
-                                            else -> "Hiện API Key"
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    )
-
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ExposedDropdownMenuBox(
+                        expanded = isProviderDropdownExpanded,
+                        onExpandedChange = { isProviderDropdownExpanded = !isProviderDropdownExpanded }
                     ) {
+                        OutlinedTextField(
+                            value = if (apiProvider == "nvidia") appStrings.apiProviderNvidia else appStrings.apiProviderGemini,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text(appStrings.apiProviderLabel) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isProviderDropdownExpanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = isProviderDropdownExpanded,
+                            onDismissRequest = { isProviderDropdownExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(appStrings.apiProviderGemini) },
+                                onClick = {
+                                    apiProvider = "gemini"
+                                    isProviderDropdownExpanded = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(appStrings.apiProviderNvidia) },
+                                onClick = {
+                                    apiProvider = "nvidia"
+                                    isProviderDropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (apiProvider == "nvidia") {
+                // Card cấu hình NVIDIA NIM / DeepSeek API
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = appStrings.nvidiaCardTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        OutlinedTextField(
+                            value = nvidiaApiKey,
+                            onValueChange = { nvidiaApiKey = it },
+                            label = { Text(appStrings.nvidiaApiKeyLabel) },
+                            placeholder = { Text(appStrings.nvidiaApiKeyPlaceholder) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = false,
+                            maxLines = 4,
+                            visualTransformation = if (nvidiaApiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { nvidiaApiKeyVisible = !nvidiaApiKeyVisible }) {
+                                    Icon(
+                                        imageVector = if (nvidiaApiKeyVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                                        contentDescription = if (nvidiaApiKeyVisible) "Hide" else "Show"
+                                    )
+                                }
+                            }
+                        )
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
@@ -479,49 +531,159 @@ fun SettingsScreen(
                                 modifier = Modifier.padding(end = 8.dp)
                             )
                             Text(
-                                text = appStrings.geminiApiKeyInfo1,
+                                text = appStrings.nvidiaApiKeyInfo,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline,
                                 fontWeight = FontWeight.Medium
                             )
                         }
-                        Text(
-                            text = appStrings.geminiApiKeyInfo2,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline,
-                            modifier = Modifier.padding(start = 28.dp)
-                        )
-                    }
 
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    // Dropdown chọn Model
-                    ExposedDropdownMenuBox(
-                        expanded = isDropdownExpanded,
-                        onExpandedChange = { isDropdownExpanded = !isDropdownExpanded }
-                    ) {
                         OutlinedTextField(
-                            value = selectedModel,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text(appStrings.geminiModelLabel) },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDropdownExpanded) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+                            value = nvidiaBaseUrl,
+                            onValueChange = { nvidiaBaseUrl = it },
+                            label = { Text(appStrings.nvidiaBaseUrlLabel) },
+                            placeholder = { Text(appStrings.nvidiaBaseUrlPlaceholder) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
                         )
-                        ExposedDropdownMenu(
-                            expanded = isDropdownExpanded,
-                            onDismissRequest = { isDropdownExpanded = false }
+
+                        ExposedDropdownMenuBox(
+                            expanded = isNvidiaModelDropdownExpanded,
+                            onExpandedChange = { isNvidiaModelDropdownExpanded = !isNvidiaModelDropdownExpanded }
                         ) {
-                            models.forEach { model ->
-                                DropdownMenuItem(
-                                    text = { Text(model) },
-                                    onClick = {
-                                        selectedModel = model
-                                        isDropdownExpanded = false
-                                    }
+                            OutlinedTextField(
+                                value = nvidiaModel,
+                                onValueChange = { nvidiaModel = it },
+                                label = { Text(appStrings.nvidiaModelLabel) },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isNvidiaModelDropdownExpanded) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor(MenuAnchorType.PrimaryEditable, true)
+                            )
+                            ExposedDropdownMenu(
+                                expanded = isNvidiaModelDropdownExpanded,
+                                onDismissRequest = { isNvidiaModelDropdownExpanded = false }
+                            ) {
+                                nvidiaModels.forEach { model ->
+                                    DropdownMenuItem(
+                                        text = { Text(model) },
+                                        onClick = {
+                                            nvidiaModel = model
+                                            isNvidiaModelDropdownExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Card cấu hình Gemini API
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = appStrings.geminiCardTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        OutlinedTextField(
+                            value = apiKey,
+                            onValueChange = { apiKey = it },
+                            label = { Text(appStrings.geminiApiKeyLabel) },
+                            placeholder = { Text(appStrings.geminiApiKeyPlaceholder) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = false,
+                            maxLines = 4,
+                            visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
+                                    Icon(
+                                        imageVector = if (apiKeyVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                                        contentDescription = if (apiKeyVisible) {
+                                            when (displayLang) {
+                                                "en" -> "Hide API Key"
+                                                "zh" -> "隐藏 API Key"
+                                                else -> "Ẩn API Key"
+                                            }
+                                        } else {
+                                            when (displayLang) {
+                                                "en" -> "Show API Key"
+                                                "zh" -> "显示 API Key"
+                                                else -> "Hiện API Key"
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        )
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Info,
+                                    contentDescription = "Info",
+                                    tint = MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.padding(end = 8.dp)
                                 )
+                                Text(
+                                    text = appStrings.geminiApiKeyInfo1,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Text(
+                                text = appStrings.geminiApiKeyInfo2,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                                modifier = Modifier.padding(start = 28.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // Dropdown chọn Model
+                        ExposedDropdownMenuBox(
+                            expanded = isDropdownExpanded,
+                            onExpandedChange = { isDropdownExpanded = !isDropdownExpanded }
+                        ) {
+                            OutlinedTextField(
+                                value = selectedModel,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text(appStrings.geminiModelLabel) },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDropdownExpanded) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+                            )
+                            ExposedDropdownMenu(
+                                expanded = isDropdownExpanded,
+                                onDismissRequest = { isDropdownExpanded = false }
+                            ) {
+                                models.forEach { model ->
+                                    DropdownMenuItem(
+                                        text = { Text(model) },
+                                        onClick = {
+                                            selectedModel = model
+                                            isDropdownExpanded = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -1004,8 +1166,12 @@ fun SettingsScreen(
             // Nút Lưu cấu hình
             Button(
                 onClick = {
+                    settings.apiProvider = apiProvider
                     settings.geminiApiKey = apiKey.trim()
                     settings.geminiModel = selectedModel
+                    settings.nvidiaApiKey = nvidiaApiKey.trim()
+                    settings.nvidiaBaseUrl = nvidiaBaseUrl.trim()
+                    settings.nvidiaModel = nvidiaModel.trim()
                     settings.updateConfigUrl = updateConfigUrl.trim()
                     settings.sourceLanguage = sourceLanguage
                     settings.targetLanguage = targetLanguage
