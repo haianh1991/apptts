@@ -1,7 +1,7 @@
 {
-  "versionCode": 30,
-  "versionName": "1.6.1",
+  "versionCode": 31,
+  "versionName": "1.6.2",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.1/WebAITransTTS_v1.6.1.apk",
-  "releaseNotes": "Cập nhật v1.6.1: Sửa lỗi thiếu tham số apiProvider/baseUrl khiến ứng dụng gọi nhầm vào SDK Gemini khi chọn NVIDIA NIM API."
+  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.2/WebAITransTTS_v1.6.2.apk",
+  "releaseNotes": "Cập nhật v1.6.2: Chuẩn hóa tự động ngắt đoạn văn (đổi dấu xuống dòng đơn thành xuống dòng kép \\n\\n) và lọc bỏ các thẻ suy luận <think> khi sử dụng NVIDIA NIM / DeepSeek API."
 }

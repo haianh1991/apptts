@@ -831,6 +831,23 @@ class GeminiManager {
         return@withContext success
     }
 
+    private fun normalizeNvidiaText(text: String): String {
+        var clean = text.replace(Regex("(?s)<think>.*?</think>"), "").trim()
+        if (clean.startsWith("<think>", ignoreCase = true)) {
+            val endThinkIdx = clean.indexOf("</think>", ignoreCase = true)
+            clean = if (endThinkIdx != -1) {
+                clean.substring(endThinkIdx + 8).trim()
+            } else {
+                ""
+            }
+        }
+        // Chuẩn hóa 3+ dấu xuống dòng thành 2 dấu xuống dòng (\n\n)
+        clean = clean.replace(Regex("(\r?\n){3,}"), "\n\n")
+        // Tự động chuyển các dấu xuống dòng đơn giữa các câu/đoạn thành 2 dấu xuống dòng (\n\n) để phân tách đoạn chuẩn
+        clean = clean.replace(Regex("(?<!\r?\n)\r?\n(?!\r?\n)"), "\n\n")
+        return clean
+    }
+
     private fun callNvidiaOpenAiApiStream(
         apiKey: String,
         baseUrl: String,
@@ -933,7 +950,7 @@ class GeminiManager {
                                 val contentChunk = delta?.optString("content", "")
                                 if (!contentChunk.isNullOrEmpty()) {
                                     chunkBuilder.append(contentChunk)
-                                    node.translatedText = chunkBuilder.toString()
+                                    node.translatedText = normalizeNvidiaText(chunkBuilder.toString())
                                     onContentUpdated?.invoke()
                                 }
                             }
@@ -944,7 +961,7 @@ class GeminiManager {
                 }
             }
 
-            val resultText = chunkBuilder.toString()
+            val resultText = normalizeNvidiaText(chunkBuilder.toString())
             if (resultText.isEmpty()) {
                 throw Exception("NVIDIA NIM API không trả về nội dung dịch.")
             }
