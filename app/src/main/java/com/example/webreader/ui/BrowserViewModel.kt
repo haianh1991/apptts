@@ -402,21 +402,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 onStepAdded = { step ->
                     _foregroundTranslationStep.value = step
                     _foregroundTranslationSteps.value = _foregroundTranslationSteps.value + step
-                    viewModelScope.launch {
-                        val updatedLog = TransactionLog(
-                            id = logId,
-                            type = "Đọc ngay",
-                            title = currentTitle,
-                            url = url,
-                            status = "Đang chạy",
-                            usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
-                            steps = logSteps.toList(),
-                            geminiResponse = null,
-                            errorMessage = null
-                        )
-                        transactionLogRepository.addLog(updatedLog)
-                        _translationLogs.value = transactionLogRepository.getLogs()
-                    }
                 },
                 onContentUpdated = { totalText ->
                     viewModelScope.launch(Dispatchers.Main) {
@@ -671,26 +656,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             maxWordCount = settings.chunkWordCount,
             apiProvider = settings.apiProvider,
             baseUrl = settings.nvidiaBaseUrl,
-            onStepAdded = { step ->
-                _activeTranslations.value = _activeTranslations.value.map {
-                    if (it.id == logId) it.copy(currentStep = step) else it
-                }
-                viewModelScope.launch {
-                    val updatedLog = TransactionLog(
-                        id = logId,
-                        type = "Hàng chờ",
-                        title = currentTitle,
-                        url = url,
-                        status = "Đang chạy",
-                        usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
-                        steps = logSteps.toList(),
-                        geminiResponse = null,
-                        errorMessage = null
-                    )
-                    transactionLogRepository.addLog(updatedLog)
-                    _translationLogs.value = transactionLogRepository.getLogs()
-                }
-            },
+            onStepAdded = { _ -> },
             onContentUpdated = { totalText ->
                 viewModelScope.launch(Dispatchers.Main) {
                     val (extractedTitle, contentText) = parseTitleAndContent(totalText, title)
@@ -705,14 +671,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         .filter { it.isNotEmpty() }
                     val displayParagraphs = if (rawParagraphs.isEmpty()) listOf("--- [Đang dịch thuật, vui lòng chờ...] ---") else rawParagraphs
 
-                    // Cập nhật động bài viết trong hàng chờ (CSDL và UI list)
+                    // Cập nhật động bài viết trong hàng chờ (UI list)
                     val allItems = _queue.value.map { item ->
                         if (item.id == newItemId) {
                             item.copy(title = extractedTitle, paragraphs = displayParagraphs)
                         } else item
                     }
                     _queue.value = allItems
-                    queueRepository.saveQueueData(_folders.value, allItems)
 
                     // Đồng bộ với trình phát đọc nếu người dùng đang nghe bài này
                     val currentIndex = _currentQueueItemIndex.value
@@ -1000,26 +965,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 maxWordCount = settings.chunkWordCount,
                 apiProvider = settings.apiProvider,
                 baseUrl = settings.nvidiaBaseUrl,
-                onStepAdded = { step ->
-                    _activeTranslations.value = _activeTranslations.value.map {
-                        if (it.id == job.id) it.copy(currentStep = step) else it
-                    }
-                    viewModelScope.launch {
-                        val updatedLog = TransactionLog(
-                            id = logId,
-                            type = "Hàng chờ",
-                            title = currentTitle,
-                            url = job.url,
-                            status = "Đang chạy",
-                            usedApiKeys = settings.geminiApiKeys.map { if (it.length > 8) it.take(4) + "..." + it.takeLast(4) else "ShortKey" },
-                            steps = logSteps.toList(),
-                            geminiResponse = null,
-                            errorMessage = null
-                        )
-                        transactionLogRepository.addLog(updatedLog)
-                        _translationLogs.value = transactionLogRepository.getLogs()
-                    }
-                },
+                onStepAdded = { _ -> },
                 onContentUpdated = { totalText ->
                     viewModelScope.launch(Dispatchers.Main) {
                         val (extractedTitle, contentText) = parseTitleAndContent(totalText, job.title)
@@ -1033,7 +979,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                             .filter { it.isNotEmpty() }
                         val displayParagraphs = if (rawParagraphs.isEmpty()) listOf("--- [Đang dịch thuật, vui lòng chờ...] ---") else rawParagraphs
 
-                        // Cập nhật động bài viết trong hàng chờ (CSDL và UI list)
+                        // Cập nhật động bài viết trong hàng chờ (UI list trong RAM)
                         var itemFound = false
                         val allItems = _queue.value.map { item ->
                             if (item.id == targetItemId) {
@@ -1059,7 +1005,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
                         val sortedItems = sortQueueItems(allItems, _folders.value)
                         _queue.value = sortedItems
-                        queueRepository.saveQueueData(_folders.value, sortedItems)
 
                         // Đồng bộ với trình phát đọc nếu người dùng đang nghe bài này
                         val currentIndex = _currentQueueItemIndex.value

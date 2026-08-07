@@ -1,7 +1,7 @@
 {
-  "versionCode": 32,
-  "versionName": "1.6.3",
+  "versionCode": 33,
+  "versionName": "1.6.4",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.3/WebAITransTTS_v1.6.3.apk",
-  "releaseNotes": "Cập nhật v1.6.3: Thêm mô hình deepseek-ai/deepseek-v4-flash. Tăng cường khả năng tự động tách đoạn văn đối với các kiểu thụt lề Hán tự \\u3000, &emsp;, &nbsp;, thẻ HTML ngắt dòng và khoảng trắng đặc thù của NVIDIA DeepSeek."
+  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.4/WebAITransTTS_v1.6.4.apk",
+  "releaseNotes": "Cập nhật v1.6.4: Tối ưu hóa hiệu năng ứng dụng. Khắc phục triệt để hiện tượng giật lag khi dịch thuật bằng cách loại bỏ việc ghi đĩa tts_queue.json/translation_logs.json liên tục ở mỗi token stream, kết hợp giới hạn tần suất vẽ lại giao diện (throttle UI updates 150ms)."
 }

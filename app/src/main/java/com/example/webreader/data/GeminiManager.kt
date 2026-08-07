@@ -641,6 +641,7 @@ class GeminiManager {
                     val responseStream = generativeModel.generateContentStream(prompt)
                     val chunkBuilder = StringBuilder()
                     var hasSafetyFinishReason = false
+                    var lastNotifyTime = 0L
                     
                     responseStream.collect { response ->
                         val candidate = response.candidates.firstOrNull()
@@ -652,9 +653,14 @@ class GeminiManager {
                         if (chunkText != null) {
                             chunkBuilder.append(chunkText)
                             node.translatedText = chunkBuilder.toString()
-                            onContentUpdated?.invoke()
+                            val now = System.currentTimeMillis()
+                            if (now - lastNotifyTime >= 150L) {
+                                lastNotifyTime = now
+                                onContentUpdated?.invoke()
+                            }
                         }
                     }
+                    onContentUpdated?.invoke()
 
                     if (hasSafetyFinishReason) {
                         throw Exception("Gemini API chặn nội dung do an toàn (SAFETY finishReason)")
@@ -950,6 +956,7 @@ class GeminiManager {
             }
 
             val chunkBuilder = StringBuilder()
+            var lastNotifyTime = 0L
             conn.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
                 var line: String?
                 while (reader.readLine().also { line = it } != null) {
@@ -967,7 +974,11 @@ class GeminiManager {
                                 if (!contentChunk.isNullOrEmpty()) {
                                     chunkBuilder.append(contentChunk)
                                     node.translatedText = normalizeNvidiaText(chunkBuilder.toString())
-                                    onContentUpdated?.invoke()
+                                    val now = System.currentTimeMillis()
+                                    if (now - lastNotifyTime >= 150L) {
+                                        lastNotifyTime = now
+                                        onContentUpdated?.invoke()
+                                    }
                                 }
                             }
                         } catch (e: Exception) {
@@ -976,6 +987,7 @@ class GeminiManager {
                     }
                 }
             }
+            onContentUpdated?.invoke()
 
             val resultText = normalizeNvidiaText(chunkBuilder.toString())
             if (resultText.isEmpty()) {
