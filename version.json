@@ -1,7 +1,7 @@
 {
-  "versionCode": 34,
-  "versionName": "1.6.5",
+  "versionCode": 35,
+  "versionName": "1.6.6",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.5/WebAITransTTS_v1.6.5.apk",
-  "releaseNotes": "Cập nhật v1.6.5: Nâng cấp Giao diện Quản lý Tủ sách Truyện Chuyên nghiệp (Professional Story Library). Tự động gom nhóm chương theo Bộ truyện & Trang web nguồn, hỗ trợ chế độ xem Lưới bìa chữ Gradient nghệ thuật & Chế độ Danh sách, hiển thị/đánh dấu chương truyện đang đọc gần nhất, hỗ trợ Thao tác hàng loạt (Batch select) và Sao lưu/Khôi phục Tủ sách bằng file JSON."
+  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.6/WebAITransTTS_v1.6.6.apk",
+  "releaseNotes": "Cập nhật v1.6.6: Nâng cấp Tủ sách Truyện Chuyên nghiệp (Story Library Manager). Gom nhóm chương theo Bộ truyện & Trang web nguồn, hỗ trợ chế độ Lưới bìa chữ Gradient & Danh sách, đánh dấu tên chương và số đoạn đang đọc dở gần nhất của mỗi bộ truyện, hỗ trợ Thao tác chọn hàng loạt (Batch select), Sao lưu/Khôi phục Tủ sách bằng JSON và ký chứng chỉ APK chuẩn."
 }
