@@ -179,6 +179,29 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _librarySortMode.value = mode
     }
 
+    private val _selectedSeriesDetailId = MutableStateFlow<String?>(null)
+    val selectedSeriesDetailId: StateFlow<String?> = _selectedSeriesDetailId
+
+    fun openSeriesDetail(seriesId: String) {
+        _selectedSeriesDetailId.value = seriesId
+    }
+
+    fun closeSeriesDetail() {
+        _selectedSeriesDetailId.value = null
+    }
+
+    fun deleteSeriesById(seriesId: String) {
+        val allSeries = com.example.webreader.data.NovelSeries.groupItemsIntoSeries(_queue.value)
+        val target = allSeries.firstOrNull { it.seriesId == seriesId }
+        if (target != null) {
+            val itemIds = target.items.map { it.id }.toSet()
+            _queue.value = _queue.value.filter { !itemIds.contains(it.id) }
+        }
+        if (_selectedSeriesDetailId.value == seriesId) {
+            _selectedSeriesDetailId.value = null
+        }
+    }
+
     private val _isBatchMode = MutableStateFlow(false)
     val isBatchMode: StateFlow<Boolean> = _isBatchMode
 

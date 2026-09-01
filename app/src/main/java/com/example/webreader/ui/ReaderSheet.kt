@@ -123,6 +123,7 @@ fun ReaderSheet(
     val librarySortMode by viewModel.librarySortMode.collectAsState()
     val isBatchMode by viewModel.isBatchMode.collectAsState()
     val selectedBatchSeriesIds by viewModel.selectedBatchSeriesIds.collectAsState()
+    val selectedSeriesDetailId by viewModel.selectedSeriesDetailId.collectAsState()
 
     var showBackupExportDialog by remember { mutableStateOf(false) }
     var backupExportJsonText by remember { mutableStateOf("") }
@@ -735,11 +736,37 @@ fun ReaderSheet(
                             }
                         }
 
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 16.dp)
-                        ) {
+                        if (selectedSeriesDetailId != null) {
+                            val detailSeries = allSeries.firstOrNull { it.seriesId == selectedSeriesDetailId }
+                            if (detailSeries != null) {
+                                NovelDetailView(
+                                    series = detailSeries,
+                                    currentQueueItemIndex = currentQueueItemIndex,
+                                    queue = queue,
+                                    isPlaying = isPlaying,
+                                    onBack = { viewModel.closeSeriesDetail() },
+                                    onPlayItem = { idx -> viewModel.playQueueItem(idx) },
+                                    onRemoveItem = { id -> viewModel.removeQueueItemById(id) },
+                                    onTogglePin = { id ->
+                                        val seriesToPin = allSeries.firstOrNull { it.seriesId == id }
+                                        if (seriesToPin != null) viewModel.togglePinSeries(seriesToPin)
+                                    },
+                                    onToggleFavorite = { id ->
+                                        val seriesToFav = allSeries.firstOrNull { it.seriesId == id }
+                                        if (seriesToFav != null) viewModel.toggleFavoriteSeries(seriesToFav)
+                                    },
+                                    onDeleteSeries = { id -> viewModel.deleteSeriesById(id) },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                LaunchedEffect(Unit) { viewModel.closeSeriesDetail() }
+                            }
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 16.dp)
+                            ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -926,11 +953,7 @@ fun ReaderSheet(
                                         if (isBatchMode) {
                                             viewModel.toggleSeriesSelection(series.seriesId)
                                         } else {
-                                            val firstItem = series.items.firstOrNull()
-                                            val firstUnreadIdx = queue.indexOfFirst { it.id == firstItem?.id }
-                                            if (firstUnreadIdx != -1) {
-                                                viewModel.playQueueItem(firstUnreadIdx)
-                                            }
+                                            viewModel.openSeriesDetail(series.seriesId)
                                         }
                                     },
                                     onSeriesLongClick = { series ->
@@ -1239,6 +1262,7 @@ fun ReaderSheet(
                             }
                         }
                     }
+                }
                     2 -> {
                         Column(
                             modifier = Modifier

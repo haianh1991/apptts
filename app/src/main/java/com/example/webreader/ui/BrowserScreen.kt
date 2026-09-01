@@ -135,9 +135,13 @@ fun BrowserScreen(
         }
     }
 
+    val selectedSeriesDetailId by viewModel.selectedSeriesDetailId.collectAsState()
+
     // Xử lý nút Back của hệ thống
-    BackHandler(enabled = canGoBack || showReaderSheet) {
-        if (showReaderSheet) {
+    BackHandler(enabled = canGoBack || showReaderSheet || selectedSeriesDetailId != null) {
+        if (selectedSeriesDetailId != null) {
+            viewModel.closeSeriesDetail()
+        } else if (showReaderSheet) {
             viewModel.setShowReaderSheet(false)
         } else {
             webViewInstance?.goBack()
@@ -752,32 +756,29 @@ fun BrowserScreen(
                 )
             }
 
-            // Reader Sheet kéo lên từ dưới (Có hoạt ảnh trượt)
+            // Full Screen Reader Sheet
             AnimatedVisibility(
                 visible = showReaderSheet,
                 enter = slideInVertically(
                     initialOffsetY = { fullHeight -> fullHeight },
-                    animationSpec = tween(350)
+                    animationSpec = tween(300)
                 ),
                 exit = slideOutVertically(
                     targetOffsetY = { fullHeight -> fullHeight },
-                    animationSpec = tween(300)
+                    animationSpec = tween(250)
                 ),
-                modifier = Modifier.align(Alignment.BottomCenter)
+                modifier = Modifier.fillMaxSize()
             ) {
-                // Thêm một lớp phủ mờ phía sau Reader Sheet để tăng tính premium
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.4f))
-                        .clickable { viewModel.setShowReaderSheet(false) }
+                        .background(MaterialTheme.colorScheme.background)
+                        .statusBarsPadding()
                 ) {
                     ReaderSheet(
                         viewModel = viewModel,
                         onOpenSettings = onOpenSettings,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .clickable(enabled = false) {} // Không tắt sheet khi nhấn trong sheet
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }
