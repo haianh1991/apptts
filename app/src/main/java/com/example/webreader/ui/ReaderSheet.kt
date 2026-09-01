@@ -117,6 +117,20 @@ fun ReaderSheet(
     var activeTab by remember { mutableIntStateOf(0) }
 
     val folders by viewModel.folders.collectAsState()
+    val libraryLayoutMode by viewModel.libraryLayoutMode.collectAsState()
+    val librarySearchQuery by viewModel.librarySearchQuery.collectAsState()
+    val libraryFilterFolderId by viewModel.libraryFilterFolderId.collectAsState()
+    val librarySortMode by viewModel.librarySortMode.collectAsState()
+    val isBatchMode by viewModel.isBatchMode.collectAsState()
+    val selectedBatchSeriesIds by viewModel.selectedBatchSeriesIds.collectAsState()
+
+    var showBackupExportDialog by remember { mutableStateOf(false) }
+    var backupExportJsonText by remember { mutableStateOf("") }
+    var showBackupImportDialog by remember { mutableStateOf(false) }
+    var backupImportJsonText by remember { mutableStateOf("") }
+    var showBatchMoveFolderDialog by remember { mutableStateOf(false) }
+    var showLibraryMenu by remember { mutableStateOf(false) }
+
     var expandedFolderIds by remember { mutableStateOf(setOf<String>()) }
 
     var showCreateFolderDialog by remember { mutableStateOf(false) }
@@ -696,6 +710,31 @@ fun ReaderSheet(
                             }
                         }
 
+                        val allSeries = remember(queue) {
+                            com.example.webreader.data.NovelSeries.groupItemsIntoSeries(queue)
+                        }
+
+                        val filteredSeries = remember(allSeries, librarySearchQuery, libraryFilterFolderId, librarySortMode) {
+                            var list = allSeries
+                            if (!libraryFilterFolderId.isNullOrEmpty()) {
+                                list = list.filter { it.folderId == libraryFilterFolderId }
+                            }
+                            if (librarySearchQuery.isNotBlank()) {
+                                val q = librarySearchQuery.lowercase().trim()
+                                list = list.filter {
+                                    it.title.lowercase().contains(q) ||
+                                    it.hostDomain.lowercase().contains(q) ||
+                                    it.items.any { item -> item.title.lowercase().contains(q) }
+                                }
+                            }
+                            when (librarySortMode) {
+                                "NAME" -> list.sortedBy { it.title }
+                                "PROGRESS" -> list.sortedByDescending { it.readProgressPercent }
+                                "ADDED" -> list.sortedByDescending { it.updatedAt }
+                                else -> list.sortedWith(compareByDescending<com.example.webreader.data.NovelSeries> { it.isPinned }.thenByDescending { it.updatedAt })
+                            }
+                        }
+
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -704,36 +743,154 @@ fun ReaderSheet(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
+                                    .padding(vertical = 4.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = appStrings.readerArticleListTitle,
+                                    text = "Tủ sách Truyện (${filteredSeries.size} bộ)",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    IconButton(
-                                        onClick = { showCreateFolderDialog = true }
-                                    ) {
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    // Layout Mode Toggle (Grid / List)
+                                    IconButton(onClick = {
+                                        viewModel.setLibraryLayoutMode(if (libraryLayoutMode == "GRID") "LIST" else "GRID")
+                                    }) {
                                         Icon(
                                             imageVector = Icons.Filled.Add,
-                                            contentDescription = appStrings.dialogNewFolderTitle,
+                                            contentDescription = "Layout Mode",
                                             tint = MaterialTheme.colorScheme.primary
                                         )
                                     }
-                                    if (queue.isNotEmpty() || activeTranslations.isNotEmpty()) {
-                                        TextButton(onClick = { viewModel.clearQueue() }) {
-                                            Text(
-                                                text = appStrings.btnDeleteAll,
-                                                color = MaterialTheme.colorScheme.error
+
+                                    // Batch Mode Button
+                                    IconButton(onClick = { viewModel.setBatchMode(!isBatchMode) }) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Bookmark,
+                                            contentDescription = "Batch Mode",
+                                            tint = if (isBatchMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                        )
+                                    }
+
+                                    // Overflow Menu
+                                    Box {
+                                        IconButton(onClick = { showLibraryMenu = true }) {
+                                            Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                                        }
+                                        DropdownMenu(
+                                            expanded = showLibraryMenu,
+                                            onDismissRequest = { showLibraryMenu = false }
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = { Text("Tạo thư mục mới") },
+                                                onClick = {
+                                                    showLibraryMenu = false
+                                                    showCreateFolderDialog = true
+                                                },
+                                                leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Sao lưu Tủ sách (JSON)") },
+                                                onClick = {
+                                                    showLibraryMenu = false
+                                                    backupExportJsonText = viewModel.exportBackupJson()
+                                                    showBackupExportDialog = true
+                                                },
+                                                leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Khôi phục Tủ sách (JSON)") },
+                                                onClick = {
+                                                    showLibraryMenu = false
+                                                    backupImportJsonText = ""
+                                                    showBackupImportDialog = true
+                                                },
+                                                leadingIcon = { Icon(Icons.Filled.Restore, contentDescription = null) }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Dọn sạch toàn bộ Tủ sách") },
+                                                onClick = {
+                                                    showLibraryMenu = false
+                                                    viewModel.clearQueue()
+                                                },
+                                                leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) }
                                             )
                                         }
                                     }
                                 }
+                            }
+
+                            // Search bar
+                            OutlinedTextField(
+                                value = librarySearchQuery,
+                                onValueChange = { viewModel.setLibrarySearchQuery(it) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                placeholder = { Text("Tìm tên truyện, chương...") },
+                                singleLine = true,
+                                trailingIcon = if (librarySearchQuery.isNotEmpty()) {
+                                    {
+                                        IconButton(onClick = { viewModel.setLibrarySearchQuery("") }) {
+                                            Icon(Icons.Filled.Close, contentDescription = "Clear")
+                                        }
+                                    }
+                                } else null,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+
+                            // Filter Chips Row
+                            if (folders.isNotEmpty()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        color = if (libraryFilterFolderId == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = RoundedCornerShape(16.dp),
+                                        modifier = Modifier.clickable { viewModel.setLibraryFilterFolderId(null) }
+                                    ) {
+                                        Text(
+                                            text = "Tất cả",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (libraryFilterFolderId == null) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                    folders.forEach { folder ->
+                                        val isSelected = libraryFilterFolderId == folder.id
+                                        Surface(
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                            shape = RoundedCornerShape(16.dp),
+                                            modifier = Modifier.clickable { viewModel.setLibraryFilterFolderId(folder.id) }
+                                        ) {
+                                            Text(
+                                                text = folder.name,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Batch Action Bar
+                            if (isBatchMode) {
+                                BatchActionBar(
+                                    selectedCount = selectedBatchSeriesIds.size,
+                                    totalCount = filteredSeries.size,
+                                    onSelectAll = { viewModel.selectAllSeries(filteredSeries) },
+                                    onMoveToFolder = { showBatchMoveFolderDialog = true },
+                                    onMarkAsRead = {},
+                                    onDeleteSelected = { viewModel.batchDeleteSelectedSeries() },
+                                    onCancelBatch = { viewModel.setBatchMode(false) }
+                                )
                             }
 
                             if (queue.isEmpty() && activeTranslations.isEmpty() && folders.isEmpty()) {
@@ -747,19 +904,41 @@ fun ReaderSheet(
                                         modifier = Modifier.padding(16.dp)
                                     ) {
                                         Text(
-                                            text = "Danh sách trống",
+                                            text = "Tủ sách trống",
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.outline
                                         )
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Text(
-                                            text = "Bạn có thể dịch nhiều trang để thêm vào đây và nghe liên tục.",
+                                            text = "Bạn có thể dịch nhiều trang để thêm vào Tủ sách và nghe liên tục.",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.outline,
                                             textAlign = TextAlign.Center
                                         )
                                     }
                                 }
+                            } else if (libraryLayoutMode == "GRID") {
+                                LibraryGridView(
+                                    seriesList = filteredSeries,
+                                    isBatchMode = isBatchMode,
+                                    selectedSeriesIds = selectedBatchSeriesIds,
+                                    onSeriesClick = { series ->
+                                        if (isBatchMode) {
+                                            viewModel.toggleSeriesSelection(series.seriesId)
+                                        } else {
+                                            val firstItem = series.items.firstOrNull()
+                                            val firstUnreadIdx = queue.indexOfFirst { it.id == firstItem?.id }
+                                            if (firstUnreadIdx != -1) {
+                                                viewModel.playQueueItem(firstUnreadIdx)
+                                            }
+                                        }
+                                    },
+                                    onSeriesLongClick = { series ->
+                                        viewModel.setBatchMode(true)
+                                        viewModel.toggleSeriesSelection(series.seriesId)
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
                             } else {
                                 LazyColumn(
                                     state = dragDropListState,
@@ -1594,6 +1773,116 @@ fun ReaderSheet(
             }
         )
     }
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    if (showBackupExportDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackupExportDialog = false },
+            title = { Text("Sao lưu Tủ sách (JSON)") },
+            text = {
+                Column {
+                    Text("Dưới đây là chuỗi sao lưu toàn bộ Tủ sách & Đánh dấu trang. Bạn có thể sao chép để lưu giữ:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = backupExportJsonText,
+                        onValueChange = {},
+                        readOnly = true,
+                        modifier = Modifier.fillMaxWidth().height(150.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+                Button(onClick = {
+                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(backupExportJsonText))
+                    android.widget.Toast.makeText(context, "Đã sao chép dữ liệu sao lưu vào bộ nhớ tạm!", android.widget.Toast.LENGTH_SHORT).show()
+                    showBackupExportDialog = false
+                }) {
+                    Text("Sao chép dữ liệu")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBackupExportDialog = false }) {
+                    Text("Đóng")
+                }
+            }
+        )
+    }
+
+    if (showBackupImportDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackupImportDialog = false },
+            title = { Text("Khôi phục Tủ sách (JSON)") },
+            text = {
+                Column {
+                    Text("Dán chuỗi dữ liệu sao lưu (JSON) vào bên dưới để khôi phục Tủ sách:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = backupImportJsonText,
+                        onValueChange = { backupImportJsonText = it },
+                        modifier = Modifier.fillMaxWidth().height(150.dp),
+                        placeholder = { Text("Dán mã JSON tại đây...") }
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val success = viewModel.importBackupJson(backupImportJsonText.trim())
+                    if (success) {
+                        android.widget.Toast.makeText(context, "Khôi phục Tủ sách thành công!", android.widget.Toast.LENGTH_SHORT).show()
+                        showBackupImportDialog = false
+                    } else {
+                        android.widget.Toast.makeText(context, "Lỗi: Mã JSON không hợp lệ!", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }) {
+                    Text("Khôi phục")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBackupImportDialog = false }) {
+                    Text("Hủy")
+                }
+            }
+        )
+    }
+
+    if (showBatchMoveFolderDialog) {
+        AlertDialog(
+            onDismissRequest = { showBatchMoveFolderDialog = false },
+            title = { Text("Chuyển thư mục cho các mục đã chọn") },
+            text = {
+                Column {
+                    TextButton(
+                        onClick = {
+                            viewModel.batchMoveSelectedSeriesToFolder(null)
+                            showBatchMoveFolderDialog = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("--- Không thuộc thư mục nào ---")
+                    }
+                    folders.forEach { folder ->
+                        TextButton(
+                            onClick = {
+                                viewModel.batchMoveSelectedSeriesToFolder(folder.id)
+                                showBatchMoveFolderDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Thư mục: ${folder.name}")
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showBatchMoveFolderDialog = false }) {
+                    Text("Hủy")
+                }
+            }
+        )
+    }
 }
 
 // Drag and drop helper state & modifiers for LazyColumn
@@ -1955,8 +2244,13 @@ fun QueueItemCard(
                         maxLines = 1
                     )
                     Spacer(modifier = Modifier.height(2.dp))
+                    val readDetailText = when {
+                        isReading -> appStrings.readingLabel
+                        item.lastReadParagraphIndex > 0 -> " (Đã đọc ${item.lastReadParagraphIndex}/${item.paragraphs.size} đoạn)"
+                        else -> ""
+                    }
                     Text(
-                        text = appStrings.paragraphCountTemplate.format(item.paragraphs.size) + if (isReading) appStrings.readingLabel else "",
+                        text = appStrings.paragraphCountTemplate.format(item.paragraphs.size) + readDetailText,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )

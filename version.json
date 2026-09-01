@@ -1,7 +1,7 @@
 {
-  "versionCode": 33,
-  "versionName": "1.6.4",
+  "versionCode": 34,
+  "versionName": "1.6.5",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.4/WebAITransTTS_v1.6.4.apk",
-  "releaseNotes": "Cập nhật v1.6.4: Tối ưu hóa hiệu năng ứng dụng. Khắc phục triệt để hiện tượng giật lag khi dịch thuật bằng cách loại bỏ việc ghi đĩa tts_queue.json/translation_logs.json liên tục ở mỗi token stream, kết hợp giới hạn tần suất vẽ lại giao diện (throttle UI updates 150ms)."
+  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.5/WebAITransTTS_v1.6.5.apk",
+  "releaseNotes": "Cập nhật v1.6.5: Nâng cấp Giao diện Quản lý Tủ sách Truyện Chuyên nghiệp (Professional Story Library). Tự động gom nhóm chương theo Bộ truyện & Trang web nguồn, hỗ trợ chế độ xem Lưới bìa chữ Gradient nghệ thuật & Chế độ Danh sách, hiển thị/đánh dấu chương truyện đang đọc gần nhất, hỗ trợ Thao tác hàng loạt (Batch select) và Sao lưu/Khôi phục Tủ sách bằng file JSON."
 }

@@ -21,6 +21,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
+import com.example.webreader.data.NovelSeries
+import com.example.webreader.data.BackupRepository
+import com.example.webreader.data.QueueData
 import com.example.webreader.data.AuthManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
@@ -144,6 +147,147 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     private val _isForceUpdate = MutableStateFlow(false)
     val isForceUpdate: StateFlow<Boolean> = _isForceUpdate
+
+    // Library Management Flows & Methods
+    val backupRepository = BackupRepository(application)
+
+    private val _libraryLayoutMode = MutableStateFlow("GRID") // "GRID" or "LIST"
+    val libraryLayoutMode: StateFlow<String> = _libraryLayoutMode
+
+    fun setLibraryLayoutMode(mode: String) {
+        _libraryLayoutMode.value = mode
+    }
+
+    private val _librarySearchQuery = MutableStateFlow("")
+    val librarySearchQuery: StateFlow<String> = _librarySearchQuery
+
+    fun setLibrarySearchQuery(query: String) {
+        _librarySearchQuery.value = query
+    }
+
+    private val _libraryFilterFolderId = MutableStateFlow<String?>(null)
+    val libraryFilterFolderId: StateFlow<String?> = _libraryFilterFolderId
+
+    fun setLibraryFilterFolderId(folderId: String?) {
+        _libraryFilterFolderId.value = folderId
+    }
+
+    private val _librarySortMode = MutableStateFlow("RECENT") // "RECENT", "NAME", "PROGRESS", "ADDED"
+    val librarySortMode: StateFlow<String> = _librarySortMode
+
+    fun setLibrarySortMode(mode: String) {
+        _librarySortMode.value = mode
+    }
+
+    private val _isBatchMode = MutableStateFlow(false)
+    val isBatchMode: StateFlow<Boolean> = _isBatchMode
+
+    fun setBatchMode(enable: Boolean) {
+        _isBatchMode.value = enable
+        if (!enable) {
+            _selectedBatchSeriesIds.value = emptySet()
+        }
+    }
+
+    private val _selectedBatchSeriesIds = MutableStateFlow<Set<String>>(emptySet())
+    val selectedBatchSeriesIds: StateFlow<Set<String>> = _selectedBatchSeriesIds
+
+    fun toggleSeriesSelection(seriesId: String) {
+        val current = _selectedBatchSeriesIds.value.toMutableSet()
+        if (current.contains(seriesId)) {
+            current.remove(seriesId)
+        } else {
+            current.add(seriesId)
+        }
+        _selectedBatchSeriesIds.value = current
+    }
+
+    fun selectAllSeries(seriesList: List<NovelSeries>) {
+        _selectedBatchSeriesIds.value = seriesList.map { it.seriesId }.toSet()
+    }
+
+    fun clearSeriesSelection() {
+        _selectedBatchSeriesIds.value = emptySet()
+    }
+
+    fun batchMoveSelectedSeriesToFolder(folderId: String?) {
+        val selectedIds = _selectedBatchSeriesIds.value
+        if (selectedIds.isEmpty()) return
+
+        val seriesList = NovelSeries.groupItemsIntoSeries(_queue.value)
+        val selectedSeries = seriesList.filter { selectedIds.contains(it.seriesId) }
+        val itemIdsToMove = selectedSeries.flatMap { it.items }.map { it.id }.toSet()
+
+        val updatedQueue = _queue.value.map { item ->
+            if (itemIdsToMove.contains(item.id)) {
+                item.copy(folderId = folderId)
+            } else item
+        }
+        _queue.value = updatedQueue
+        queueRepository.saveQueueData(_folders.value, updatedQueue)
+        setBatchMode(false)
+    }
+
+    fun batchDeleteSelectedSeries() {
+        val selectedIds = _selectedBatchSeriesIds.value
+        if (selectedIds.isEmpty()) return
+
+        val seriesList = NovelSeries.groupItemsIntoSeries(_queue.value)
+        val selectedSeries = seriesList.filter { selectedIds.contains(it.seriesId) }
+        val itemsToDelete = selectedSeries.flatMap { it.items }
+        val itemIdsToDelete = itemsToDelete.map { it.id }.toSet()
+
+        val updatedQueue = _queue.value.filter { !itemIdsToDelete.contains(it.id) }
+        val updatedTrash = (_trash.value + itemsToDelete).distinctBy { it.id }
+
+        _queue.value = updatedQueue
+        _trash.value = updatedTrash
+        queueRepository.saveQueueData(_folders.value, updatedQueue)
+        queueRepository.saveTrashData(updatedTrash)
+        setBatchMode(false)
+    }
+
+    fun togglePinSeries(series: NovelSeries) {
+        val targetIds = series.items.map { it.id }.toSet()
+        val newPinned = !series.isPinned
+        val updatedQueue = _queue.value.map { item ->
+            if (targetIds.contains(item.id)) {
+                item.copy(isPinned = newPinned)
+            } else item
+        }
+        _queue.value = updatedQueue
+        queueRepository.saveQueueData(_folders.value, updatedQueue)
+    }
+
+    fun toggleFavoriteSeries(series: NovelSeries) {
+        val targetIds = series.items.map { it.id }.toSet()
+        val newFav = !series.isFavorite
+        val updatedQueue = _queue.value.map { item ->
+            if (targetIds.contains(item.id)) {
+                item.copy(isFavorite = newFav)
+            } else item
+        }
+        _queue.value = updatedQueue
+        queueRepository.saveQueueData(_folders.value, updatedQueue)
+    }
+
+    fun exportBackupJson(): String {
+        val queueData = QueueData(_folders.value, _queue.value)
+        return backupRepository.createBackupJson(queueData, _bookmarks.value)
+    }
+
+    fun importBackupJson(jsonString: String): Boolean {
+        val result = backupRepository.parseBackupJson(jsonString) ?: return false
+        val (queueData, bookmarksList) = result
+        _folders.value = queueData.folders
+        val sortedItems = sortQueueItems(queueData.items, queueData.folders)
+        _queue.value = sortedItems
+        _bookmarks.value = bookmarksList
+        queueRepository.saveQueueData(queueData.folders, sortedItems)
+        bookmarkRepository.saveBookmarks(bookmarksList)
+        updateBookmarkStatus()
+        return true
+    }
 
     init {
         activeInstance = this
