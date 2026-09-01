@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -106,6 +107,7 @@ fun ReaderSheet(
     modifier: Modifier = Modifier
 ) {
     val appStrings = LocalAppStrings.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val isTranslating by viewModel.isTranslating.collectAsState()
     val foregroundTranslationStep by viewModel.foregroundTranslationStep.collectAsState()
     val foregroundTranslationSteps by viewModel.foregroundTranslationSteps.collectAsState()
@@ -797,6 +799,10 @@ fun ReaderSheet(
                                         if (seriesToFav != null) viewModel.toggleFavoriteSeries(seriesToFav)
                                     },
                                     onDeleteSeries = { id -> viewModel.deleteSeriesById(id) },
+                                    onTranslateChapter = { url ->
+                                        viewModel.loadUrlInBrowser(url)
+                                        viewModel.setShowReaderSheet(false)
+                                    },
                                     modifier = Modifier.fillMaxSize()
                                 )
                             } else {
@@ -1015,6 +1021,15 @@ fun ReaderSheet(
                                         viewModel.setBatchMode(true)
                                         viewModel.toggleSeriesSelection(series.seriesId)
                                     },
+                                    onTranslateSeries = { series ->
+                                        val latestChapter = series.items.maxByOrNull { it.createdAt } ?: series.items.lastOrNull()
+                                        if (latestChapter != null && latestChapter.url.isNotBlank()) {
+                                            viewModel.loadUrlInBrowser(latestChapter.url)
+                                            viewModel.setShowReaderSheet(false)
+                                        } else {
+                                            android.widget.Toast.makeText(context, "Chưa có chương nào trong bộ truyện này", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
                                     modifier = Modifier.weight(1f)
                                 )
                             } else {
@@ -1189,6 +1204,7 @@ fun ReaderSheet(
                                             is QueueListItem.FolderHeaderItem -> {
                                                 val folderItems = queue.filter { it.folderId == item.folder.id }
                                                 val lastReadItem = folderItems.firstOrNull { it.lastReadParagraphIndex > 0 } ?: folderItems.lastOrNull()
+                                                val latestChapter = folderItems.maxByOrNull { it.createdAt } ?: folderItems.lastOrNull()
                                                 val totalParas = folderItems.sumOf { it.paragraphs.size }
                                                 FolderRow(
                                                     folder = item.folder,
@@ -1214,6 +1230,14 @@ fun ReaderSheet(
                                                     },
                                                     onOpenDetail = {
                                                         viewModel.openSeriesDetail("folder_${item.folder.id}")
+                                                    },
+                                                    onTranslateChapter = {
+                                                        if (latestChapter != null && latestChapter.url.isNotBlank()) {
+                                                            viewModel.loadUrlInBrowser(latestChapter.url)
+                                                            viewModel.setShowReaderSheet(false)
+                                                        } else {
+                                                            android.widget.Toast.makeText(context, "Chưa có chương nào trong bộ truyện này", android.widget.Toast.LENGTH_SHORT).show()
+                                                        }
                                                     },
                                                     onRename = {
                                                         folderToRename = item.folder
@@ -1870,8 +1894,6 @@ fun ReaderSheet(
         )
     }
 
-    val context = androidx.compose.ui.platform.LocalContext.current
-
     if (showBackupExportDialog) {
         AlertDialog(
             onDismissRequest = { showBackupExportDialog = false },
@@ -2168,6 +2190,7 @@ fun FolderRow(
     onToggleExpand: () -> Unit,
     onPlayLastRead: () -> Unit = {},
     onOpenDetail: () -> Unit = {},
+    onTranslateChapter: () -> Unit = {},
     onRename: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
@@ -2296,6 +2319,16 @@ fun FolderRow(
                     expanded = showFolderMenu,
                     onDismissRequest = { showFolderMenu = false }
                 ) {
+                    DropdownMenuItem(
+                        text = { Text("Dịch chương") },
+                        onClick = {
+                            showFolderMenu = false
+                            onTranslateChapter()
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Filled.Translate, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text("Xem toàn bộ chương") },
                         onClick = {

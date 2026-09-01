@@ -28,17 +28,25 @@ import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,6 +67,7 @@ fun LibraryGridView(
     selectedSeriesIds: Set<String>,
     onSeriesClick: (NovelSeries) -> Unit,
     onSeriesLongClick: (NovelSeries) -> Unit,
+    onTranslateSeries: (NovelSeries) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     LazyVerticalGrid(
@@ -75,7 +84,8 @@ fun LibraryGridView(
                 isSelected = isSelected,
                 isBatchMode = isBatchMode,
                 onClick = { onSeriesClick(series) },
-                onLongClick = { onSeriesLongClick(series) }
+                onLongClick = { onSeriesLongClick(series) },
+                onTranslateSeries = { onTranslateSeries(series) }
             )
         }
     }
@@ -89,6 +99,7 @@ fun NovelCoverCard(
     isBatchMode: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onTranslateSeries: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // Generate deterministic gradient background color based on title hash
@@ -126,10 +137,11 @@ fun NovelCoverCard(
                     .background(Brush.linearGradient(gradientColors))
                     .padding(12.dp)
             ) {
-                // Pin / Favorite Icon Badge
+                // Pin / Favorite Icon Badge & 3-dot Menu
                 Row(
                     modifier = Modifier.align(Alignment.TopEnd),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     if (series.isPinned) {
                         Icon(
@@ -146,6 +158,46 @@ fun NovelCoverCard(
                             tint = Color.Red,
                             modifier = Modifier.size(16.dp)
                         )
+                    }
+
+                    var showCardMenu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(
+                            onClick = { showCardMenu = true },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.MoreVert,
+                                contentDescription = "Menu",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showCardMenu,
+                            onDismissRequest = { showCardMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Dịch chương") },
+                                onClick = {
+                                    showCardMenu = false
+                                    onTranslateSeries()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Filled.Translate, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Chi tiết bộ truyện") },
+                                onClick = {
+                                    showCardMenu = false
+                                    onClick()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Filled.Book, contentDescription = null)
+                                }
+                            )
+                        }
                     }
                 }
 

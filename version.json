@@ -1,7 +1,7 @@
 {
-  "versionCode": 37,
-  "versionName": "1.6.8",
+  "versionCode": 38,
+  "versionName": "1.6.9",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.8/WebAITransTTS_v1.6.8.apk",
-  "releaseNotes": "Cập nhật v1.6.8: Đồng bộ hoàn toàn Thư mục = Bộ truyện. Hiển thị đầy đủ tất cả thư mục/bộ truyện với thanh cuộn ngang LazyRow. Chế độ Danh sách (List) hiển thị Card truyện chuyên nghiệp với bìa mini, số chương, nhãn '📖 Đang đọc' và nút Đọc tiếp nhanh. Danh sách chương hiển thị đầy đủ khi mở rộng thư mục hoặc xem chi tiết, nhãn 'đang đọc' nhỏ gọn trên tiêu đề chương, bấm vào chương phát tiếp từ đoạn dở."
+  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.9/WebAITransTTS_v1.6.9.apk",
+  "releaseNotes": "Cập nhật v1.6.9: Thêm tính năng 'Dịch chương' trong menu 3 chấm dọc của mỗi bộ truyện (cả ở chế độ Danh sách Thư mục, Lưới bìa và trang Chi tiết bộ truyện). Khi bấm vào sẽ tự động mở trang web gốc của chương dịch mới nhất trong trình duyệt để bạn dễ dàng bấm chuyển chương kế tiếp và dịch tiếp tục."
 }

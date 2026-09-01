@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -80,9 +81,11 @@ fun NovelDetailView(
     onTogglePin: (seriesId: String) -> Unit,
     onToggleFavorite: (seriesId: String) -> Unit,
     onDeleteSeries: (seriesId: String) -> Unit,
+    onTranslateChapter: (url: String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    val latestChapter = remember(series.items) { series.items.maxByOrNull { it.createdAt } ?: series.items.lastOrNull() }
 
     val gradientColors = remember(series.title) {
         val hash = abs(series.title.hashCode())
@@ -133,6 +136,44 @@ fun NovelDetailView(
                     contentDescription = "Favorite",
                     tint = if (series.isFavorite) Color.Red else MaterialTheme.colorScheme.outline
                 )
+            }
+
+            var showDetailMenu by remember { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { showDetailMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = "Menu",
+                        tint = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+                DropdownMenu(
+                    expanded = showDetailMenu,
+                    onDismissRequest = { showDetailMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Dịch chương") },
+                        onClick = {
+                            showDetailMenu = false
+                            if (latestChapter != null && latestChapter.url.isNotBlank()) {
+                                onTranslateChapter(latestChapter.url)
+                            }
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Filled.Translate, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Xóa bộ truyện", color = MaterialTheme.colorScheme.error) },
+                        onClick = {
+                            showDetailMenu = false
+                            showDeleteConfirmDialog = true
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                        }
+                    )
+                }
             }
         }
 
@@ -251,6 +292,17 @@ fun NovelDetailView(
                                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(if (series.readProgressPercent > 0f) "Đọc tiếp" else "Đọc từ đầu")
+                            }
+
+                            if (latestChapter != null && latestChapter.url.isNotBlank()) {
+                                OutlinedButton(
+                                    onClick = { onTranslateChapter(latestChapter.url) },
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(Icons.Filled.Translate, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Dịch chương")
+                                }
                             }
 
                             OutlinedButton(
