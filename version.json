@@ -1,7 +1,7 @@
 {
-  "versionCode": 36,
-  "versionName": "1.6.7",
+  "versionCode": 37,
+  "versionName": "1.6.8",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.7/WebAITransTTS_v1.6.7.apk",
-  "releaseNotes": "Cập nhật v1.6.7: Nâng cấp Tủ sách Truyện toàn màn hình (Full-Screen Library). Thêm màn hình Chi tiết Bộ truyện (Novel Detail View) hiển thị danh sách tất cả các chương đã dịch, đánh dấu 'đang đọc' trực tiếp trên nhãn chương, bấm vào chương để đọc/phát tiếp từ đoạn đang dở. Nút Back thông minh: quay lại từ Chi tiết -> Tủ sách -> WebView."
+  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.8/WebAITransTTS_v1.6.8.apk",
+  "releaseNotes": "Cập nhật v1.6.8: Đồng bộ hoàn toàn Thư mục = Bộ truyện. Hiển thị đầy đủ tất cả thư mục/bộ truyện với thanh cuộn ngang LazyRow. Chế độ Danh sách (List) hiển thị Card truyện chuyên nghiệp với bìa mini, số chương, nhãn '📖 Đang đọc' và nút Đọc tiếp nhanh. Danh sách chương hiển thị đầy đủ khi mở rộng thư mục hoặc xem chi tiết, nhãn 'đang đọc' nhỏ gọn trên tiêu đề chương, bấm vào chương phát tiếp từ đoạn dở."
 }

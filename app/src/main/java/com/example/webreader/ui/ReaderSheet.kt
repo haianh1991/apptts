@@ -44,6 +44,9 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedTextField
@@ -60,6 +63,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -598,7 +603,7 @@ fun ReaderSheet(
                         }
                         val failedItems = activeTranslations.filter { it.status == TranslationStatus.FAILED }
                         
-                        val listItems = remember(translatingItems, failedItems, folders, queue, expandedFolderIds) {
+                        val listItems = remember(translatingItems, failedItems, folders, queue, expandedFolderIds, libraryFilterFolderId, librarySearchQuery) {
                             val list = mutableListOf<QueueListItem>()
                             
                             if (translatingItems.isNotEmpty()) {
@@ -610,28 +615,64 @@ fun ReaderSheet(
                                 list.add(QueueListItem.FailedHeader(failedItems.size))
                                 failedItems.forEach { list.add(QueueListItem.FailedItem(it)) }
                             }
+
+                            val query = librarySearchQuery.trim().lowercase()
                             
                             if (folders.isNotEmpty()) {
-                                list.add(QueueListItem.FoldersHeader)
-                                folders.forEach { folder ->
-                                    val folderItems = queue.filter { it.folderId == folder.id }
-                                    val isExpanded = expandedFolderIds.contains(folder.id)
-                                    list.add(QueueListItem.FolderHeaderItem(folder, folderItems.size, isExpanded))
-                                    if (isExpanded) {
-                                        folderItems.forEach { list.add(QueueListItem.FolderQueueItem(it, folder.id)) }
+                                val targetFolders = if (!libraryFilterFolderId.isNullOrEmpty()) {
+                                    folders.filter { it.id == libraryFilterFolderId }
+                                } else {
+                                    folders
+                                }
+
+                                val searchFilteredFolders = if (query.isNotBlank()) {
+                                    targetFolders.filter { folder ->
+                                        folder.name.lowercase().contains(query) ||
+                                        queue.any { it.folderId == folder.id && it.title.lowercase().contains(query) }
+                                    }
+                                } else {
+                                    targetFolders
+                                }
+
+                                if (searchFilteredFolders.isNotEmpty()) {
+                                    list.add(QueueListItem.FoldersHeader)
+                                    searchFilteredFolders.forEach { folder ->
+                                        var folderItems = queue.filter { it.folderId == folder.id }
+                                        if (query.isNotBlank()) {
+                                            val matchingItems = folderItems.filter { it.title.lowercase().contains(query) }
+                                            if (matchingItems.isNotEmpty()) {
+                                                folderItems = matchingItems
+                                            }
+                                        }
+                                        val isExpanded = (!libraryFilterFolderId.isNullOrEmpty() && libraryFilterFolderId == folder.id) ||
+                                                         (query.isNotBlank()) ||
+                                                         expandedFolderIds.contains(folder.id)
+                                        list.add(QueueListItem.FolderHeaderItem(folder, folderItems.size, isExpanded))
+                                        if (isExpanded) {
+                                            folderItems.forEach { list.add(QueueListItem.FolderQueueItem(it, folder.id)) }
+                                        }
                                     }
                                 }
                                 
-                                val folderIds = folders.map { it.id }.toSet()
-                                val rootItems = queue.filter { it.folderId == null || !folderIds.contains(it.folderId) }
-                                if (rootItems.isNotEmpty()) {
-                                    list.add(QueueListItem.RootItemsHeader(rootItems.size))
-                                    rootItems.forEach { list.add(QueueListItem.RootQueueItem(it)) }
+                                if (libraryFilterFolderId.isNullOrEmpty()) {
+                                    val folderIds = folders.map { it.id }.toSet()
+                                    var rootItems = queue.filter { it.folderId == null || !folderIds.contains(it.folderId) }
+                                    if (query.isNotBlank()) {
+                                        rootItems = rootItems.filter { it.title.lowercase().contains(query) }
+                                    }
+                                    if (rootItems.isNotEmpty()) {
+                                        list.add(QueueListItem.RootItemsHeader(rootItems.size))
+                                        rootItems.forEach { list.add(QueueListItem.RootQueueItem(it)) }
+                                    }
                                 }
                             } else {
-                                if (queue.isNotEmpty()) {
-                                    list.add(QueueListItem.FinishedHeader(queue.size))
-                                    queue.forEach { list.add(QueueListItem.FlatQueueItem(it)) }
+                                var flatQueue = queue
+                                if (query.isNotBlank()) {
+                                    flatQueue = flatQueue.filter { it.title.lowercase().contains(query) }
+                                }
+                                if (flatQueue.isNotEmpty()) {
+                                    list.add(QueueListItem.FinishedHeader(flatQueue.size))
+                                    flatQueue.forEach { list.add(QueueListItem.FlatQueueItem(it)) }
                                 }
                             }
                             list
@@ -711,8 +752,8 @@ fun ReaderSheet(
                             }
                         }
 
-                        val allSeries = remember(queue) {
-                            com.example.webreader.data.NovelSeries.groupItemsIntoSeries(queue)
+                        val allSeries = remember(queue, folders) {
+                            com.example.webreader.data.NovelSeries.groupItemsIntoSeries(queue, folders)
                         }
 
                         val filteredSeries = remember(allSeries, librarySearchQuery, libraryFilterFolderId, librarySortMode) {
@@ -786,8 +827,8 @@ fun ReaderSheet(
                                         viewModel.setLibraryLayoutMode(if (libraryLayoutMode == "GRID") "LIST" else "GRID")
                                     }) {
                                         Icon(
-                                            imageVector = Icons.Filled.Add,
-                                            contentDescription = "Layout Mode",
+                                            imageVector = if (libraryLayoutMode == "GRID") Icons.AutoMirrored.Filled.List else Icons.Filled.GridView,
+                                            contentDescription = if (libraryLayoutMode == "GRID") "Chuyển sang dạng Danh sách" else "Chuyển sang dạng Lưới",
                                             tint = MaterialTheme.colorScheme.primary
                                         )
                                     }
@@ -868,37 +909,51 @@ fun ReaderSheet(
                                 shape = RoundedCornerShape(12.dp)
                             )
 
-                            // Filter Chips Row
+                            // Filter Chips Row (cuộn ngang mượt mà)
                             if (folders.isNotEmpty()) {
-                                Row(
+                                androidx.compose.foundation.lazy.LazyRow(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 4.dp),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Surface(
-                                        color = if (libraryFilterFolderId == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                        shape = RoundedCornerShape(16.dp),
-                                        modifier = Modifier.clickable { viewModel.setLibraryFilterFolderId(null) }
-                                    ) {
-                                        Text(
-                                            text = "Tất cả",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (libraryFilterFolderId == null) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                        )
+                                    item {
+                                        val totalChapters = queue.size
+                                        Surface(
+                                            color = if (libraryFilterFolderId == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                            shape = RoundedCornerShape(16.dp),
+                                            modifier = Modifier.clickable { viewModel.setLibraryFilterFolderId(null) }
+                                        ) {
+                                            Text(
+                                                text = "Tất cả (${allSeries.size} bộ • $totalChapters chương)",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = if (libraryFilterFolderId == null) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (libraryFilterFolderId == null) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                            )
+                                        }
                                     }
-                                    folders.forEach { folder ->
+                                    items(folders.size) { index ->
+                                        val folder = folders[index]
+                                        val folderChapterCount = queue.count { it.folderId == folder.id }
                                         val isSelected = libraryFilterFolderId == folder.id
                                         Surface(
                                             color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                                             shape = RoundedCornerShape(16.dp),
-                                            modifier = Modifier.clickable { viewModel.setLibraryFilterFolderId(folder.id) }
+                                            modifier = Modifier.clickable {
+                                                if (isSelected) {
+                                                    viewModel.setLibraryFilterFolderId(null)
+                                                } else {
+                                                    viewModel.setLibraryFilterFolderId(folder.id)
+                                                    expandedFolderIds = expandedFolderIds + folder.id
+                                                }
+                                            }
                                         ) {
                                             Text(
-                                                text = folder.name,
+                                                text = "${folder.name} ($folderChapterCount)",
                                                 style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                                 color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                             )
@@ -1132,9 +1187,14 @@ fun ReaderSheet(
                                                 )
                                             }
                                             is QueueListItem.FolderHeaderItem -> {
+                                                val folderItems = queue.filter { it.folderId == item.folder.id }
+                                                val lastReadItem = folderItems.firstOrNull { it.lastReadParagraphIndex > 0 } ?: folderItems.lastOrNull()
+                                                val totalParas = folderItems.sumOf { it.paragraphs.size }
                                                 FolderRow(
                                                     folder = item.folder,
                                                     itemCount = item.itemCount,
+                                                    totalParagraphs = totalParas,
+                                                    lastReadChapter = lastReadItem,
                                                     isExpanded = item.isExpanded,
                                                     onToggleExpand = {
                                                         expandedFolderIds = if (item.isExpanded) {
@@ -1142,6 +1202,18 @@ fun ReaderSheet(
                                                         } else {
                                                             expandedFolderIds + item.folder.id
                                                         }
+                                                    },
+                                                    onPlayLastRead = {
+                                                        if (lastReadItem != null) {
+                                                            val idx = queue.indexOfFirst { it.id == lastReadItem.id }
+                                                            if (idx != -1) {
+                                                                viewModel.playQueueItem(idx)
+                                                                activeTab = 0
+                                                            }
+                                                        }
+                                                    },
+                                                    onOpenDetail = {
+                                                        viewModel.openSeriesDetail("folder_${item.folder.id}")
                                                     },
                                                     onRename = {
                                                         folderToRename = item.folder
@@ -2090,8 +2162,12 @@ fun Modifier.dragItem(
 fun FolderRow(
     folder: QueueFolder,
     itemCount: Int,
+    totalParagraphs: Int = 0,
+    lastReadChapter: QueueItem? = null,
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
+    onPlayLastRead: () -> Unit = {},
+    onOpenDetail: () -> Unit = {},
     onRename: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
@@ -2099,46 +2175,115 @@ fun FolderRow(
     val appStrings = LocalAppStrings.current
     var showFolderMenu by remember { mutableStateOf(false) }
 
+    val gradientColors = remember(folder.name) {
+        val hash = kotlin.math.abs(folder.name.hashCode())
+        val hue1 = (hash % 360).toFloat()
+        val hue2 = ((hash + 45) % 360).toFloat()
+        listOf(
+            Color.hsl(hue1, 0.65f, 0.40f),
+            Color.hsl(hue2, 0.70f, 0.25f)
+        )
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
             .clickable { onToggleExpand() },
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
         ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f))
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = if (isExpanded) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowRight,
-                contentDescription = if (isExpanded) appStrings.contentDescriptionCollapse else appStrings.contentDescriptionExpand,
-                tint = MaterialTheme.colorScheme.secondary
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Icon(
-                imageVector = Icons.Filled.Folder,
-                contentDescription = appStrings.folderTitle,
-                tint = MaterialTheme.colorScheme.secondary
-            )
-            Spacer(modifier = Modifier.width(8.dp))
+            // Mini typography book cover
+            Box(
+                modifier = Modifier
+                    .size(36.dp, 48.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(androidx.compose.ui.graphics.Brush.linearGradient(gradientColors)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = folder.name.take(1).uppercase(),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = folder.name,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
+
+                Spacer(modifier = Modifier.height(2.dp))
+
                 Text(
-                    text = appStrings.folderItemCountTemplate.format(itemCount),
+                    text = "$itemCount chương" + if (totalParagraphs > 0) " • $totalParagraphs đoạn văn" else "",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline
                 )
+
+                if (lastReadChapter != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    val readText = if (lastReadChapter.lastReadParagraphIndex > 0) {
+                        "📖 Đang đọc: ${lastReadChapter.title} (${lastReadChapter.lastReadParagraphIndex}/${lastReadChapter.paragraphs.size})"
+                    } else {
+                        "📖 Đang đọc: ${lastReadChapter.title}"
+                    }
+                    Text(
+                        text = readText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
+
+            // Quick Play Button
+            if (lastReadChapter != null) {
+                IconButton(onClick = onPlayLastRead) {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = "Đọc tiếp",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            // Open Novel Detail Button
+            IconButton(onClick = onOpenDetail) {
+                Icon(
+                    imageVector = Icons.Filled.Book,
+                    contentDescription = "Chi tiết",
+                    tint = MaterialTheme.colorScheme.secondary
+                )
+            }
+
+            // Expand/Collapse Indicator
+            IconButton(onClick = onToggleExpand) {
+                Icon(
+                    imageVector = if (isExpanded) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowRight,
+                    contentDescription = if (isExpanded) appStrings.contentDescriptionCollapse else appStrings.contentDescriptionExpand,
+                    tint = MaterialTheme.colorScheme.outline
+                )
+            }
+
             Box {
                 IconButton(onClick = { showFolderMenu = true }) {
                     Icon(
@@ -2151,6 +2296,16 @@ fun FolderRow(
                     expanded = showFolderMenu,
                     onDismissRequest = { showFolderMenu = false }
                 ) {
+                    DropdownMenuItem(
+                        text = { Text("Xem toàn bộ chương") },
+                        onClick = {
+                            showFolderMenu = false
+                            onOpenDetail()
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Filled.Book, contentDescription = null)
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text(appStrings.folderRenameMenu) },
                         onClick = {
@@ -2243,9 +2398,12 @@ fun QueueItemCard(
         modifier = modifier
     ) {
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onPlayPause() },
             colors = CardDefaults.cardColors(containerColor = containerColor),
-            border = borderColor
+            border = borderColor,
+            shape = RoundedCornerShape(12.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -2254,29 +2412,37 @@ fun QueueItemCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = item.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (isCurrent || isReading || item.lastReadParagraphIndex > 0) FontWeight.Bold else FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        // Nhãn 'đang đọc' nhỏ gọn ngay trên nhãn chương theo yêu cầu người dùng
+                        if (isCurrent || isReading || item.lastReadParagraphIndex > 0) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                color = if (isCurrent && isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = if (item.lastReadParagraphIndex > 0) "đang đọc: ${item.lastReadParagraphIndex}/${item.paragraphs.size}" else "đang đọc",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(3.dp))
                     Text(
-                        text = item.title,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = item.url,
+                        text = "${item.paragraphs.size} đoạn văn • ${item.getEffectiveHostDomain()}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline,
                         maxLines = 1
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    val readDetailText = when {
-                        isReading -> appStrings.readingLabel
-                        item.lastReadParagraphIndex > 0 -> " (Đã đọc ${item.lastReadParagraphIndex}/${item.paragraphs.size} đoạn)"
-                        else -> ""
-                    }
-                    Text(
-                        text = appStrings.paragraphCountTemplate.format(item.paragraphs.size) + readDetailText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
                     )
                 }
 

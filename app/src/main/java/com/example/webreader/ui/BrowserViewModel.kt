@@ -151,7 +151,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     // Library Management Flows & Methods
     val backupRepository = BackupRepository(application)
 
-    private val _libraryLayoutMode = MutableStateFlow("GRID") // "GRID" or "LIST"
+    private val _libraryLayoutMode = MutableStateFlow("LIST") // "LIST" or "GRID"
     val libraryLayoutMode: StateFlow<String> = _libraryLayoutMode
 
     fun setLibraryLayoutMode(mode: String) {
@@ -191,11 +191,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun deleteSeriesById(seriesId: String) {
-        val allSeries = com.example.webreader.data.NovelSeries.groupItemsIntoSeries(_queue.value)
+        val allSeries = com.example.webreader.data.NovelSeries.groupItemsIntoSeries(_queue.value, _folders.value)
         val target = allSeries.firstOrNull { it.seriesId == seriesId }
         if (target != null) {
             val itemIds = target.items.map { it.id }.toSet()
             _queue.value = _queue.value.filter { !itemIds.contains(it.id) }
+            if (!target.folderId.isNullOrBlank()) {
+                deleteFolder(target.folderId, deleteItems = true)
+            }
         }
         if (_selectedSeriesDetailId.value == seriesId) {
             _selectedSeriesDetailId.value = null
