@@ -170,13 +170,17 @@ fun SettingsScreen(
         ?: if (selectedEngine == "com.google.android.tts") appStrings.ttsGoogleEngineForce else selectedEngine.ifBlank { appStrings.ttsDefaultEngine }
 
     val models = listOf(
-        "gemma-4-31b-it",
-        "gemma-4-26b-a4b-it",
-        "gemini-2.5-flash-lite",
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
         "gemini-3.5-flash",
-        "gemini-3-flash-preview",
+        "gemini-3.5-flash-lite",
         "gemini-3.1-flash-lite",
-        "gemini-2.5-flash"
+        "gemini-3-flash-preview",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemma-4-31b-it",
+        "gemma-4-26b-a4b-it"
     )
 
     Scaffold(

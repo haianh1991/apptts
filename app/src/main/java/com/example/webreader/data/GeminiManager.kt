@@ -168,7 +168,7 @@ class GeminiManager {
     suspend fun translateTitle(
         title: String,
         apiKeys: List<String>,
-        modelName: String = "gemini-3.5-flash",
+        modelName: String = "gemini-3.8-flash",
         sourceLang: String = "Auto",
         targetLang: String = "Tiếng Việt",
         uiLanguage: String = "vi"
@@ -1002,7 +1002,7 @@ class GeminiManager {
     suspend fun translateContent(
         text: String,
         apiKeys: List<String>,
-        modelName: String = "gemini-3.5-flash",
+        modelName: String = "gemini-3.8-flash",
         sourceLang: String = "Auto",
         targetLang: String = "Tiếng Việt",
         customInstructions: String = "",

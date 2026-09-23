@@ -24,7 +24,7 @@ class SettingsRepository(context: Context) {
         }
 
     var geminiModel: String
-        get() = prefs.getString("gemini_model", "gemini-3.5-flash") ?: "gemini-3.5-flash"
+        get() = prefs.getString("gemini_model", "gemini-3.8-flash") ?: "gemini-3.8-flash"
         set(value) = prefs.edit().putString("gemini_model", value).apply()
 
     var nvidiaApiKey: String

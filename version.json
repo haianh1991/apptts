@@ -1,7 +1,7 @@
 {
-  "versionCode": 38,
-  "versionName": "1.6.9",
+  "versionCode": 39,
+  "versionName": "1.7.0",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.6.9/WebAITransTTS_v1.6.9.apk",
-  "releaseNotes": "Cập nhật v1.6.9: Thêm tính năng 'Dịch chương' trong menu 3 chấm dọc của mỗi bộ truyện (cả ở chế độ Danh sách Thư mục, Lưới bìa và trang Chi tiết bộ truyện). Khi bấm vào sẽ tự động mở trang web gốc của chương dịch mới nhất trong trình duyệt để bạn dễ dàng bấm chuyển chương kế tiếp và dịch tiếp tục."
+  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.7.0/WebAITransTTS_v1.7.0.apk",
+  "releaseNotes": "Cập nhật v1.7.0: Cập nhật toàn bộ các dòng model Gemini Flash từ 2.5 trở lên theo tài liệu chính thức của Google (gemini-3.8-flash, gemini-3.7-flash, gemini-3.6-flash, gemini-3.5-flash, gemini-3.5-flash-lite, gemini-3.1-flash-lite, gemini-3-flash-preview, gemini-2.5-flash, gemini-2.5-flash-lite, gemma-4-31b-it, gemma-4-26b-a4b-it). Đặt gemini-3.8-flash làm mô hình mặc định tốc độ cao và thông minh nhất."
 }
