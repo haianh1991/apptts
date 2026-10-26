@@ -170,15 +170,15 @@ fun SettingsScreen(
         ?: if (selectedEngine == "com.google.android.tts") appStrings.ttsGoogleEngineForce else selectedEngine.ifBlank { appStrings.ttsDefaultEngine }
 
     val models = listOf(
-        "gemini-3.8-flash",
-        "gemini-3.7-flash",
-        "gemini-3.6-flash",
-        "gemini-3.5-flash",
-        "gemini-3.5-flash-lite",
-        "gemini-3.1-flash-lite",
-        "gemini-3-flash-preview",
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
+        "gemini-3-flash-preview",
+        "gemini-3.8-flash",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+        "gemini-flash-latest",
+        "gemini-flash-lite-latest",
         "gemma-4-31b-it",
         "gemma-4-26b-a4b-it"
     )
@@ -840,7 +840,7 @@ fun SettingsScreen(
                             }
                         },
                         label = { Text(appStrings.settingsChunkWordCountTitle) },
-                        placeholder = { Text("6000") },
+                        placeholder = { Text("2500") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
@@ -1182,7 +1182,7 @@ fun SettingsScreen(
                     settings.targetLanguage = targetLanguage
                     settings.customInstructions = customInstructions.trim()
                     settings.disclaimerText = disclaimerText.trim()
-                    settings.chunkWordCount = chunkWordCount.toIntOrNull() ?: 6000
+                    settings.chunkWordCount = chunkWordCount.toIntOrNull() ?: 2500
                     viewModel.updateTtsSettings(ttsSpeed, ttsPitch, selectedEngine)
                     viewModel.checkAppUpdate()
                     onBackClick()

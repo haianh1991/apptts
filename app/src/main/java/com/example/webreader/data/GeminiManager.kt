@@ -3,6 +3,7 @@ package com.example.webreader.data
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.RequestOptions
 import com.google.ai.client.generativeai.type.content
+import com.google.ai.client.generativeai.type.generationConfig
 import com.google.ai.client.generativeai.type.HarmCategory
 import com.google.ai.client.generativeai.type.BlockThreshold
 import com.google.ai.client.generativeai.type.SafetySetting
@@ -44,6 +45,7 @@ class GeminiManager {
         if (len <= 10) return len / 2
         val mid = len / 2
         val scanRange = len / 4 // Quét 25% xung quanh trung điểm
+        val closingQuotes = setOf('”', '』', '」', '\'', '"', '）', ')')
 
         // Ưu tiên 1: Dấu xuống dòng \n
         var bestIndex = -1
@@ -70,7 +72,13 @@ class GeminiManager {
                 }
             }
         }
-        if (bestIndex != -1) return bestIndex + 1
+        if (bestIndex != -1) {
+            var splitPos = bestIndex + 1
+            while (splitPos < len && text[splitPos] in closingQuotes) {
+                splitPos++
+            }
+            return splitPos
+        }
 
         // Ưu tiên 3: Dấu phẩy hoặc dấu ngắt khác
         val commas = setOf('，', ',', ';', '；')
@@ -83,7 +91,13 @@ class GeminiManager {
                 }
             }
         }
-        if (bestIndex != -1) return bestIndex + 1
+        if (bestIndex != -1) {
+            var splitPos = bestIndex + 1
+            while (splitPos < len && text[splitPos] in closingQuotes) {
+                splitPos++
+            }
+            return splitPos
+        }
 
         // Ưu tiên 4: Trung điểm
         return mid
@@ -103,22 +117,29 @@ class GeminiManager {
             return false
         }
         
-        // 2. Kiểm tra từ khóa an toàn thực sự
-        val safetyKeywords = listOf(
+        // 2. Kiểm tra từ khóa an toàn, ngắt quãng giữa chừng (MAX_TOKENS/RECITATION) hoặc sót tiếng Trung (incomplete_translation)
+        val safetyOrSplitKeywords = listOf(
             "safety",
             "blocked",
             "prohibited",
             "finishreason",
-            "provided content"
+            "provided content",
+            "max_tokens",
+            "recitation",
+            "blocklist",
+            "spii",
+            "reason: other",
+            "responsestoppedexception",
+            "blockedpromptexception",
+            "incomplete_translation"
         )
-        val hasSafetyKeyword = safetyKeywords.any { errText.contains(it) }
+        val hasSafetyKeyword = safetyOrSplitKeywords.any { errText.contains(it) }
         if (hasSafetyKeyword) return true
         
         // 3. Xử lý lỗi phân tích cú pháp JSON của SDK
         val isSerialization = errText.contains("serializationexception") || errText.contains("missingfieldexception")
         if (isSerialization) {
-            // Chỉ coi là lỗi an toàn nếu có đề cập đến các từ khóa an toàn/nội dung bị chặn
-            return errText.contains("safety") || errText.contains("block") || errText.contains("content")
+            return errText.contains("safety") || errText.contains("block") || errText.contains("content") || errText.contains("candidates")
         }
         
         return false
@@ -298,7 +319,7 @@ class GeminiManager {
                    - Các nút bấm, liên kết chuyển trang (ví dụ: "Chương sau", "Mục lục", "Trang chủ", "上一章", "目錄", "下一章", "投票推薦", "加入書籤", "小說報錯", "關燈", "字體-", "字體+").
                    - Các quảng cáo xen kẽ giữa các câu (ví dụ: thẻ script quảng cáo như `<script>loadAdv(5,0);</script>`).
                    - Các bình luận bên lề của độc giả hoặc quảng cáo bằng chữ khác không liên quan đến cốt truyện chính.
-                3. **Dịch văn học**: Dịch nội dung chính vừa lọc được từ ngôn ngữ gốc ($srcTextVi) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, trôi chảy, đúng ngữ cảnh văn học phong cách truyện chữ. Sử dụng từ Hán-Việt mượt mà, xưng hô phù hợp bối cảnh nhân vật.
+                3. **Dịch văn học đầy đủ 100%**: Dịch TOÀN BỘ 100% nội dung chính vừa lọc được từ ngôn ngữ gốc ($srcTextVi) sang ngôn ngữ đích ($targetLang) một cách tự nhiên, trôi chảy, đúng ngữ cảnh văn học phong cách truyện chữ. Sử dụng từ Hán-Việt mượt mà, xưng hô phù hợp bối cảnh nhân vật. Tuyệt đối KHÔNG được bỏ sót đoạn văn nào, KHÔNG được tóm tắt hay cắt bớt, và KHÔNG được giữ nguyên chữ Hán/ngôn ngữ gốc chưa dịch ở bất kỳ câu hay đoạn văn nào.
                 4. **Giữ nguyên định dạng đoạn văn**: BẮT BUỘC phân tách rõ ràng từng đoạn văn bằng hai dấu xuống dòng (\n\n). Không được gộp dán liền tất cả các đoạn văn thành một khối văn bản duy nhất.
                 5. **Đầu ra nghiêm ngặt**: Tuyệt đối không thêm bất kỳ văn bản giới thiệu, chú thích ngoài lề hay lời thoại dẫn dắt nào của AI (như "Dưới đây là bản dịch...", "Đây là kết quả dịch:..."). Chỉ trả về kết quả dịch sạch theo đúng yêu cầu định dạng.$rule6Vi
                 </rules>
@@ -365,7 +386,7 @@ class GeminiManager {
                    - 导航链接/翻页按钮（例如：“上一章”、“目录”、“下一章”、“投票推荐”、“加入书签”、“小说报错”、“关灯”、“字体-”、“字体+”）。
                    - 广告代码或内嵌广告脚本（例如：`<script>loadAdv(5,0);</script>`）。
                    - 读者无关评论或非主体文字。
-                3. **高质量翻译**: 将净化后的主体内容从源语言 ($srcTextZh) 翻译为目标语言 ($targetLang)，匹配目标文体的专业特点，使行文自然流畅。
+                3. **100%完整高质量翻译**: 将净化后的主体内容从源语言 ($srcTextZh) 100%完整地翻译为目标语言 ($targetLang)，匹配目标文体的专业特点，使行文自然流畅。绝对不要遗漏、概括、截断或保留任何未翻译的源语言句子或段落。
                 4. **保留段落结构**: 必须明确使用两个换行符 (\n\n) 分隔每一个段落。绝对不要将所有段落合并为一个长文本块。
                 5. **无额外输出**: 绝对不要包含任何介绍性或解释性文本（例如“以下是翻译内容...”）。仅返回符合格式要求的翻译核心内容。$rule6Zh
                 </rules>
@@ -432,7 +453,7 @@ class GeminiManager {
                    - Navigation links/buttons (e.g., "Next Chapter", "Table of Contents", "Home", "上一章", "目錄", "下一章", "投票推薦", "加入書籤", "小說報錯").
                    - In-between advertisements and script tags (e.g., `<script>loadAdv(5,0);</script>`).
                    - Irrelevant comments or non-main text.
-                3. **High-Quality Translation**: Translate the cleaned core content from the source language ($srcTextEn) into the target language ($targetLang) in a natural, smooth, and fluent manner, matching the target language's literary style.
+                3. **100% Complete High-Quality Translation**: Translate 100% of the cleaned core content from the source language ($srcTextEn) into the target language ($targetLang) in a natural, smooth, and fluent manner, matching the target language's literary style. Never skip, summarize, truncate, or leave any sentence or paragraph untranslated in the source language.
                 4. **Preserve Paragraph Structure**: MUST clearly separate each paragraph with two newlines (\n\n). Never merge paragraphs into a single solid block of text.
                 5. **Strict Output Formatting**: Do NOT include any introductory or explanatory text (such as "Here is the translation..."). Only return the clean translation matching the required format.$rule6En
                 </rules>
@@ -448,6 +469,150 @@ class GeminiManager {
         }
 
         return finalPrompt
+    }
+
+    private fun isTargetLanguageCjk(targetLang: String): Boolean {
+        val lower = targetLang.lowercase()
+        return lower.contains("trung") || lower.contains("chinese") || lower.contains("中文") ||
+               lower.contains("nhật") || lower.contains("japanese") ||
+               lower.contains("hàn") || lower.contains("korean")
+    }
+
+    private fun countCjkChars(text: String): Int {
+        var count = 0
+        for (c in text) {
+            if (isCjk(c)) count++
+        }
+        return count
+    }
+
+    private suspend fun repairUntranslatedParagraphs(
+        translatedText: String,
+        apiKey: String,
+        modelName: String,
+        targetLang: String,
+        apiProvider: String,
+        baseUrl: String,
+        addStep: (String) -> Unit
+    ): String {
+        val paragraphs = translatedText.split("\n")
+        val repairedParagraphs = paragraphs.toMutableList()
+        var repairedCount = 0
+
+        for (i in repairedParagraphs.indices) {
+            val para = repairedParagraphs[i].trim()
+            if (para.isEmpty()) continue
+            val cjkCount = countCjkChars(para)
+            if (cjkCount >= 4) {
+                try {
+                    val repairInstruction = "Bạn là chuyên gia dịch thuật văn học. Hãy dịch trọn vẹn 100% đoạn văn dưới đây sang $targetLang. Tuyệt đối KHÔNG để sót bất kỳ chữ Hán/ký tự ngôn ngữ gốc nào, không giải thích, chỉ trả về đúng nội dung bản dịch."
+                    val repairPrompt = "Dịch đầy đủ đoạn văn tiểu thuyết sau sang $targetLang:\n\n$para"
+                    if (apiProvider == "nvidia" || apiProvider == "openai") {
+                        val tempNode = TranslationNode(para)
+                        callNvidiaOpenAiApiStream(
+                            apiKey = apiKey,
+                            baseUrl = baseUrl,
+                            modelName = modelName,
+                            sysInstruction = repairInstruction,
+                            prompt = repairPrompt,
+                            node = tempNode,
+                            onContentUpdated = null,
+                            addStep = {}
+                        )
+                        val fixed = tempNode.translatedText.trim()
+                        if (fixed.isNotEmpty() && countCjkChars(fixed) < cjkCount) {
+                            repairedParagraphs[i] = fixed
+                            repairedCount++
+                        }
+                    } else {
+                        val repairModel = GenerativeModel(
+                            modelName = modelName,
+                            apiKey = apiKey,
+                            generationConfig = generationConfig {
+                                temperature = 0.2f
+                                topP = 0.95f
+                            },
+                            requestOptions = RequestOptions(timeout = 60.seconds),
+                            safetySettings = safetySettings,
+                            systemInstruction = content {
+                                text(repairInstruction)
+                            }
+                        )
+                        val resp = repairModel.generateContent(repairPrompt)
+                        val fixed = resp.text?.trim()
+                        if (!fixed.isNullOrEmpty() && countCjkChars(fixed) < cjkCount) {
+                            repairedParagraphs[i] = fixed
+                            repairedCount++
+                        }
+                    }
+                } catch (_: Exception) {
+                    // Nếu đoạn đơn lẻ bị lỗi sẽ được kiểm tra lại ở bước tổng thể phía dưới
+                }
+            }
+        }
+        if (repairedCount > 0) {
+            addStep("Đã dịch bổ sung thành công $repairedCount đoạn văn còn sót chữ Hán.")
+        }
+        return repairedParagraphs.joinToString("\n")
+    }
+
+    private suspend fun verifyAndRepairTranslation(
+        chunk: String,
+        translatedText: String,
+        apiKey: String,
+        modelName: String,
+        targetLang: String,
+        apiProvider: String,
+        baseUrl: String,
+        chunkInfo: String,
+        node: TranslationNode,
+        onContentUpdated: (() -> Unit)?,
+        addStep: (String) -> Unit
+    ): String {
+        if (isTargetLanguageCjk(targetLang)) return translatedText
+
+        val inputCjk = countCjkChars(chunk)
+        if (inputCjk < 15) return translatedText
+
+        // 1. Kiểm tra hiện tượng bị cắt cụt (Truncation) do model tự dừng sớm
+        val outputWords = countWords(translatedText)
+        if (inputCjk >= 350 && outputWords < ((inputCjk - 80) * 0.45).toInt()) {
+            throw Exception("incomplete_translation: Bản dịch $chunkInfo bị thiếu hụt nội dung ($outputWords từ dịch so với $inputCjk chữ Hán gốc). Tự động chia nhỏ để dịch đầy đủ.")
+        }
+
+        // 2. Kiểm tra chữ Hán còn sót lại trong bản dịch
+        val remainingCjk = countCjkChars(translatedText)
+        if (remainingCjk <= 3) return translatedText
+
+        val paragraphsWithCjk = translatedText.split("\n").count { countCjkChars(it) >= 4 }
+        // Nếu còn sót quá nhiều chữ Hán (> 25% văn bản gốc hoặc > 6 đoạn văn), chia đôi chunk để dịch lại chuẩn xác
+        if (remainingCjk > maxOf(120, (inputCjk * 0.25).toInt()) || paragraphsWithCjk > 6) {
+            throw Exception("incomplete_translation: Phát hiện $remainingCjk chữ Hán chưa được dịch trong $chunkInfo ($paragraphsWithCjk đoạn). Tự động chia nhỏ để dịch lại.")
+        }
+
+        // Nếu chỉ sót một vài câu/đoạn nhỏ (1..6 đoạn), tự động chạy dịch bổ sung cho chính các đoạn đó
+        if (paragraphsWithCjk > 0 || remainingCjk >= 6) {
+            addStep("Phát hiện $paragraphsWithCjk đoạn còn sót chữ Hán ($remainingCjk ký tự) trong $chunkInfo, đang dịch bổ sung tự động...")
+            val repaired = repairUntranslatedParagraphs(
+                translatedText = translatedText,
+                apiKey = apiKey,
+                modelName = modelName,
+                targetLang = targetLang,
+                apiProvider = apiProvider,
+                baseUrl = baseUrl,
+                addStep = addStep
+            )
+            node.translatedText = repaired
+            onContentUpdated?.invoke()
+
+            val afterRepairCjk = countCjkChars(repaired)
+            if (afterRepairCjk >= 12) {
+                throw Exception("incomplete_translation: Vẫn còn $afterRepairCjk chữ Hán chưa dịch sau khi dịch bổ sung ở $chunkInfo. Tự động chia nhỏ đoạn văn.")
+            }
+            return repaired
+        }
+
+        return translatedText
     }
 
     private suspend fun translateChunkRecursive(
@@ -514,14 +679,18 @@ class GeminiManager {
             addStep(stepMsg)
 
             try {
+                val literaryContextNote = if (depth >= 2) {
+                    "\n[Lưu ý ngữ cảnh: Đây là trích đoạn tiểu thuyết văn học giả tưởng. Hãy dịch đầy đủ 100% toàn bộ các câu sang $targetLang một cách khách quan, tuyệt đối không để sót chữ Hán gốc.]\n"
+                } else ""
+
                 val prompt = if (isFirstChunk && !title.isNullOrBlank()) {
                     when (uiLanguage) {
                         "vi" -> {
                             """
                                 Tiêu đề gốc cần dịch:
                                 $title
-                                
-                                Dưới đây là văn bản trang web cần dịch sang ngôn ngữ đích ($targetLang):
+                                $literaryContextNote
+                                Dưới đây là văn bản trang web cần dịch đầy đủ 100% sang ngôn ngữ đích ($targetLang):
                                 
                                 $chunk
                             """.trimIndent()
@@ -530,8 +699,8 @@ class GeminiManager {
                             """
                                 要翻译的原始标题：
                                 $title
-                                
-                                以下是要翻译为 $targetLang 的网页原始文本：
+                                $literaryContextNote
+                                以下是要100%完整翻译为 $targetLang 的网页原始文本：
                                 
                                 $chunk
                             """.trimIndent()
@@ -540,8 +709,8 @@ class GeminiManager {
                             """
                                 Original title to translate:
                                 $title
-                                
-                                Here is the raw webpage text to translate into $targetLang:
+                                $literaryContextNote
+                                Here is the raw webpage text to translate 100% completely into $targetLang:
                                 
                                 $chunk
                             """.trimIndent()
@@ -552,7 +721,7 @@ class GeminiManager {
                         "vi" -> {
                             val srcLangText = if (sourceLang.equals("Auto", ignoreCase = true)) "tự động phát hiện" else sourceLang
                             """
-                                Hãy dịch văn bản thô dưới đây từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang). Hãy lọc bỏ các thành phần quảng cáo hoặc nút điều hướng nếu có, dịch sát nghĩa và tự nhiên nhất:
+                                Hãy dịch đầy đủ 100% văn bản thô dưới đây từ ngôn ngữ gốc ($srcLangText) sang ngôn ngữ đích ($targetLang). Hãy lọc bỏ các thành phần quảng cáo hoặc nút điều hướng nếu có, dịch sát nghĩa, tự nhiên nhất và không để sót bất kỳ câu tiếng Trung/ngôn ngữ gốc nào:$literaryContextNote
                                 
                                 $chunk
                             """.trimIndent()
@@ -560,7 +729,7 @@ class GeminiManager {
                         "zh" -> {
                             val srcLangTextZh = if (sourceLang.equals("Auto", ignoreCase = true)) "自动检测" else sourceLang
                             """
-                                请将以下原始文本从源语言 ($srcLangTextZh) 翻译为目标语言 ($targetLang)。如果存在任何广告或导航链接，请进行过滤，并自然且专业地翻译核心内容：
+                                请将以下原始文本从源语言 ($srcLangTextZh) 100%完整地翻译为目标语言 ($targetLang)。如果存在任何广告或导航链接，请进行过滤，并自然且专业地翻译核心内容：$literaryContextNote
                                 
                                 $chunk
                             """.trimIndent()
@@ -568,7 +737,7 @@ class GeminiManager {
                         else -> {
                             val srcLangTextEn = if (sourceLang.equals("Auto", ignoreCase = true)) "automatically detected" else sourceLang
                             """
-                                Please translate the following raw text from the source language ($srcLangTextEn) into the target language ($targetLang). Filter out any advertisements or navigation links if present, and translate the core content naturally and professionally:
+                                Please translate 100% of the following raw text from the source language ($srcLangTextEn) into the target language ($targetLang). Filter out any advertisements or navigation links if present, and translate the core content naturally and completely:$literaryContextNote
                                 
                                 $chunk
                             """.trimIndent()
@@ -589,10 +758,27 @@ class GeminiManager {
                         onContentUpdated = onContentUpdated,
                         addStep = ::addStep
                     )
+                    verifyAndRepairTranslation(
+                        chunk = chunk,
+                        translatedText = node.translatedText,
+                        apiKey = apiKey,
+                        modelName = modelName,
+                        targetLang = targetLang,
+                        apiProvider = apiProvider,
+                        baseUrl = baseUrl,
+                        chunkInfo = chunkInfo,
+                        node = node,
+                        onContentUpdated = onContentUpdated,
+                        addStep = ::addStep
+                    )
                 } else {
                     val generativeModel = GenerativeModel(
                         modelName = modelName,
                         apiKey = apiKey,
+                        generationConfig = generationConfig {
+                            temperature = 0.3f
+                            topP = 0.95f
+                        },
                         requestOptions = RequestOptions(timeout = 180.seconds),
                         safetySettings = safetySettings,
                         systemInstruction = content {
@@ -640,35 +826,55 @@ class GeminiManager {
 
                     val responseStream = generativeModel.generateContentStream(prompt)
                     val chunkBuilder = StringBuilder()
-                    var hasSafetyFinishReason = false
+                    var abnormalFinishReason: String? = null
                     var lastNotifyTime = 0L
                     
                     responseStream.collect { response ->
                         val candidate = response.candidates.firstOrNull()
-                        if (candidate?.finishReason?.name == "SAFETY" || candidate?.finishReason?.name == "PROHIBITED_CONTENT") {
-                            hasSafetyFinishReason = true
-                            throw Exception("Gemini API chặn nội dung do an toàn (finishReason: ${candidate.finishReason?.name})")
+                        val finishName = candidate?.finishReason?.name
+                        if (finishName == "SAFETY" ||
+                            finishName == "PROHIBITED_CONTENT" ||
+                            finishName == "RECITATION" ||
+                            finishName == "MAX_TOKENS" ||
+                            finishName == "BLOCKLIST" ||
+                            finishName == "SPII"
+                        ) {
+                            abnormalFinishReason = finishName
+                            throw Exception("Gemini API ngắt kết quả (finishReason: $finishName)")
                         }
                         val chunkText = response.text
                         if (chunkText != null) {
                             chunkBuilder.append(chunkText)
                             node.translatedText = chunkBuilder.toString()
-                            val now = System.currentTimeMillis()
-                            if (now - lastNotifyTime >= 150L) {
-                                lastNotifyTime = now
+                            val nowTime = System.currentTimeMillis()
+                            if (nowTime - lastNotifyTime >= 150L) {
+                                lastNotifyTime = nowTime
                                 onContentUpdated?.invoke()
                             }
                         }
                     }
                     onContentUpdated?.invoke()
 
-                    if (hasSafetyFinishReason) {
-                        throw Exception("Gemini API chặn nội dung do an toàn (SAFETY finishReason)")
+                    if (abnormalFinishReason != null) {
+                        throw Exception("Gemini API ngắt kết quả (finishReason: $abnormalFinishReason)")
                     }
 
                     val translatedText = chunkBuilder.toString()
                     if (translatedText.isNotEmpty()) {
                         node.translatedText = translatedText
+                        verifyAndRepairTranslation(
+                            chunk = chunk,
+                            translatedText = translatedText,
+                            apiKey = apiKey,
+                            modelName = modelName,
+                            targetLang = targetLang,
+                            apiProvider = apiProvider,
+                            baseUrl = baseUrl,
+                            chunkInfo = chunkInfo,
+                            node = node,
+                            onContentUpdated = onContentUpdated,
+                            addStep = ::addStep
+                        )
                     } else {
                         throw Exception("Gemini API không trả về nội dung dịch.")
                     }
@@ -694,12 +900,12 @@ class GeminiManager {
                     addStep("Thất bại $chunkInfo với API Key số $keyNum ($keySnippet) [$errLabel]. Chi tiết: $detailedErr")
                     chunkErrors.add("[$keySnippet] [$errLabel]: $detailedErr")
                 } else if (isSafety) {
-                    val errLabel = "Lỗi An toàn (Safety Blocked)"
-                    addStep("Thất bại $chunkInfo với API Key số $keyNum ($keySnippet) [$errLabel]. Chi tiết: $detailedErr")
+                    val errLabel = "Cần chia nhỏ đoạn văn (Safety / MaxTokens / Sót chữ Hán)"
+                    addStep("Cảnh báo $chunkInfo với API Key số $keyNum ($keySnippet) [$errLabel]. Chi tiết: $detailedErr")
                     chunkErrors.add("[$keySnippet] [$errLabel]: $detailedErr")
                     
-                    if (chunk.length > 250) {
-                        addStep("Kích hoạt cơ chế tự động chia nhỏ đoạn văn $chunkInfo (kích thước: ${chunk.length} ký tự > 250 ký tự) làm hai để gửi lại.")
+                    if (chunk.length > 60) {
+                        addStep("Kích hoạt cơ chế tự động chia nhỏ đoạn văn $chunkInfo (kích thước: ${chunk.length} ký tự > 60 ký tự) làm hai để dịch chuẩn xác 100%.")
                         
                         val splitIdx = findGoodSplitPointForSafety(chunk)
                         val leftText = chunk.substring(0, splitIdx)
@@ -762,7 +968,7 @@ class GeminiManager {
                         success = leftSuccess && rightSuccess
                         return@withContext success
                     } else {
-                        addStep("Phân đoạn nhỏ ($chunkInfo) bị chặn bởi bộ lọc an toàn. Ngừng thử các phím khác. Sử dụng văn bản gốc làm fallback.")
+                        addStep("Phân đoạn cực nhỏ ($chunkInfo, ${chunk.length} ký tự) bị chặn. Ngừng chia nhỏ.")
                         break // Break out of key attempt loop
                     }
                 } else {
@@ -1012,7 +1218,7 @@ class GeminiManager {
         onStepAdded: ((String) -> Unit)? = null,
         onContentUpdated: ((String) -> Unit)? = null,
         uiLanguage: String = "vi",
-        maxWordCount: Int = 6000,
+        maxWordCount: Int = 2500,
         apiProvider: String = "gemini",
         baseUrl: String = "https://integrate.api.nvidia.com/v1"
     ): Result<String> = withContext(Dispatchers.IO) {
@@ -1169,18 +1375,29 @@ class GeminiManager {
         return trimmed.split(Regex("\\s+")).size
     }
 
-    private fun splitTextIntoChunks(text: String, maxWordCount: Int = 6000): List<String> {
-        val totalWords = countWords(text)
-        if (totalWords <= maxWordCount) return listOf(text)
+    private fun normalizeInputTextForChunking(text: String): String {
+        return text
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+            .replace(Regex("(?i)<br\\s*/?>|</?p>"), "\n")
+            .replace(Regex("(?<=\\S)\\s*(?:\\u3000{2,}|(?:&emsp;){2,})"), "\n\u3000\u3000")
+            .replace(Regex("\\n{3,}"), "\n\n")
+            .trim()
+    }
 
-        val paragraphs = text.split("\n")
+    private fun splitTextIntoChunks(text: String, maxWordCount: Int = 2500): List<String> {
+        val normalizedText = normalizeInputTextForChunking(text)
+        val totalWords = countWords(normalizedText)
+        if (totalWords <= maxWordCount) return listOf(normalizedText)
+
+        val paragraphs = normalizedText.split("\n")
         
         // 1. Pre-split paragraphs using maxWordCount to determine exact greedy chunk count
         val flatParagraphsMax = splitParagraphs(paragraphs, maxWordCount)
         val flatParagraphsMaxWordCounts = flatParagraphsMax.map { countWords(it) }
         val numChunks = getFlatGreedyChunksCount(flatParagraphsMaxWordCounts, maxWordCount)
         
-        if (numChunks <= 1) return listOf(text)
+        if (numChunks <= 1) return listOf(normalizedText)
 
         // 2. Calculate dynamic target chunk size
         val targetChunkSize = kotlin.math.ceil(totalWords.toDouble() / numChunks).toInt()
@@ -1316,10 +1533,15 @@ class GeminiManager {
         }
         
         val candidate = text.substring(0, splitIndex)
+        val closingQuotes = setOf('”', '』', '」', '\'', '"', '）', ')')
         val punctuation = listOf('.', '?', '!', '。', '？', '！', ',', '，', ';', '；')
         for (i in candidate.length - 1 downTo splitIndex / 2) {
             if (candidate[i] in punctuation) {
-                return i + 1
+                var splitPos = i + 1
+                while (splitPos < text.length && text[splitPos] in closingQuotes) {
+                    splitPos++
+                }
+                return splitPos
             }
         }
         

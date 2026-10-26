@@ -406,7 +406,11 @@ fun BrowserScreen(
                                             var elements = temp.querySelectorAll(sel);
                                             elements.forEach(function(el) { el.remove(); });
                                         });
-                                        window.originalWebContent = temp.innerText.trim();
+                                        temp.querySelectorAll('br').forEach(function(el) { el.replaceWith('\n'); });
+                                        temp.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li, tr, blockquote, article, section').forEach(function(el) {
+                                            el.appendChild(document.createTextNode('\n'));
+                                        });
+                                        window.originalWebContent = temp.innerText.replace(/\n{3,}/g, '\n\n').trim();
                                     })()
                                 """.trimIndent()
                                 view?.evaluateJavascript(cacheScript, null)
@@ -529,7 +533,11 @@ fun BrowserScreen(
                                             var elements = temp.querySelectorAll(sel);
                                             elements.forEach(function(el) { el.remove(); });
                                         });
-                                        var text = temp.innerText.trim();
+                                        temp.querySelectorAll('br').forEach(function(el) { el.replaceWith('\n'); });
+                                        temp.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li, tr, blockquote, article, section').forEach(function(el) {
+                                            el.appendChild(document.createTextNode('\n'));
+                                        });
+                                        var text = temp.innerText.replace(/\n{3,}/g, '\n\n').trim();
                                         if (text.length < 100) {
                                             text = document.body.innerText.trim();
                                         }
