@@ -840,7 +840,7 @@ fun SettingsScreen(
                             }
                         },
                         label = { Text(appStrings.settingsChunkWordCountTitle) },
-                        placeholder = { Text("2500") },
+                        placeholder = { Text("6000") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
@@ -1182,7 +1182,7 @@ fun SettingsScreen(
                     settings.targetLanguage = targetLanguage
                     settings.customInstructions = customInstructions.trim()
                     settings.disclaimerText = disclaimerText.trim()
-                    settings.chunkWordCount = chunkWordCount.toIntOrNull() ?: 2500
+                    settings.chunkWordCount = chunkWordCount.toIntOrNull() ?: 6000
                     viewModel.updateTtsSettings(ttsSpeed, ttsPitch, selectedEngine)
                     viewModel.checkAppUpdate()
                     onBackClick()

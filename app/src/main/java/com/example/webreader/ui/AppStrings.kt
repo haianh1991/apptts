@@ -418,7 +418,7 @@ class ViAppStrings : AppStrings {
     override val disclaimerPosMiddle = "Giữa prompt"
     override val disclaimerPosBottom = "Cuối prompt"
     override val settingsChunkWordCountTitle = "Số từ tối đa mỗi phân đoạn (Chunk)"
-    override val settingsChunkWordCountHelp = "Giới hạn số từ/chữ cho mỗi phần dịch nhỏ (mặc định: 2500). Với truyện dài ~10.000 chữ, mức 2500 giúp chia thành 4 phần đều nhau, dịch trọn vẹn và không bao giờ bị sót tiếng Trung."
+    override val settingsChunkWordCountHelp = "Giới hạn số từ/chữ cho mỗi phần dịch nhỏ (mặc định: 6000). Chia văn bản dài thành các phần cân bằng nhau mà không vượt quá giới hạn này."
 }
 
 class EnAppStrings : AppStrings {
@@ -625,7 +625,7 @@ class EnAppStrings : AppStrings {
     override val disclaimerPosMiddle = "Middle"
     override val disclaimerPosBottom = "Bottom"
     override val settingsChunkWordCountTitle = "Max words per segment (Chunk)"
-    override val settingsChunkWordCountHelp = "Word limit for each translated section (default: 2500). Smaller values ensure complete translation without truncation or untranslated paragraphs."
+    override val settingsChunkWordCountHelp = "Word limit for each translated section (default: 6000). Splits long text into balanced chunks without exceeding this limit."
 }
 
 class ZhAppStrings : AppStrings {
@@ -832,7 +832,7 @@ class ZhAppStrings : AppStrings {
     override val disclaimerPosMiddle = "Prompt 中部"
     override val disclaimerPosBottom = "Prompt 底部"
     override val settingsChunkWordCountTitle = "每个分段的最大字数 (Chunk)"
-    override val settingsChunkWordCountHelp = "每个翻译分段的字数限制（默认：2500）。较小的值可确保完整翻译，避免长章节截断或漏翻。"
+    override val settingsChunkWordCountHelp = "每个翻译分段的字数限制（默认：6000）。将长文本分割成大小相近且不超过此限制的段落。"
 }
 
 val LocalAppStrings = staticCompositionLocalOf<AppStrings> {

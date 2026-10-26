@@ -103,16 +103,7 @@ class SettingsRepository(context: Context) {
         set(value) = prefs.edit().putString("app_display_language", value).apply()
 
     var chunkWordCount: Int
-        get() {
-            val saved = prefs.getInt("chunk_word_count", 2500)
-            // Tự động chuyển đổi giá trị mặc định cũ (6000) sang 2500 để tránh lỗi vượt giới hạn token đầu ra hoặc thiếu sót đoạn văn dài
-            return if (saved == 6000) {
-                prefs.edit().putInt("chunk_word_count", 2500).apply()
-                2500
-            } else {
-                saved.coerceIn(500, 10000)
-            }
-        }
+        get() = prefs.getInt("chunk_word_count", 6000).coerceIn(500, 10000)
         set(value) = prefs.edit().putInt("chunk_word_count", value.coerceIn(500, 10000)).apply()
 }
 

@@ -1,7 +1,7 @@
 {
-  "versionCode": 40,
-  "versionName": "1.7.1",
+  "versionCode": 41,
+  "versionName": "1.7.2",
   "minVersionCode": 2,
-  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.7.1/WebAITransTTS_v1.7.1.apk",
-  "releaseNotes": "Cập nhật v1.7.1: Sửa triệt để lỗi giữ nguyên tiếng Trung ở chương dài (~10.000 chữ) bằng cách chuẩn hóa ngắt đoạn từ DOM, giảm kích thước chia đoạn tối ưu (2500 chữ/phần), tự động phát hiện và dịch bổ sung/chia nhỏ đệ quy khi gặp MAX_TOKENS hoặc sót chữ Hán. Rà soát và cập nhật danh sách mô hình Gemini Flash chính thức mới nhất."
+  "updateUrl": "https://github.com/haianh1991/apptts/releases/download/v1.7.2/WebAITransTTS_v1.7.2.apk",
+  "releaseNotes": "Cập nhật v1.7.2: Sửa chính xác nguyên nhân gốc rễ từ log_1.docx khiến phần 2/2 bị giữ nguyên tiếng Trung trên gemini-3.5-flash-lite: (1) Sửa thuật toán findGoodWordSplitPoint ưu tiên dấu chấm kết câu (. 。 ！ ？) thay vì ngắt giữa câu ở dấu phẩy (，), giữ mặc định chunkWordCount = 6000; (2) Bọc văn bản trong thẻ <source_text> kèm lệnh ép dịch ở cuối prompt cho các phần tiếp theo; (3) Bổ sung bộ bắt lỗi hậu kiểm chữ Hán, ghi log cảnh báo rõ ràng và tự động ép dịch lại / chia nhỏ khi AI trả về nguyên văn tiếng Trung."
 }
