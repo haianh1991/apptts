@@ -486,6 +486,16 @@ class GeminiManager {
         return count
     }
 
+    private fun buildGenerationConfig(modelName: String, temp: Float = 0.3f) =
+        if (modelName.startsWith("gemini-4", ignoreCase = true)) {
+            null
+        } else {
+            generationConfig {
+                temperature = temp
+                topP = 0.95f
+            }
+        }
+
     private suspend fun repairUntranslatedParagraphs(
         translatedText: String,
         apiKey: String,
@@ -528,10 +538,7 @@ class GeminiManager {
                         val repairModel = GenerativeModel(
                             modelName = modelName,
                             apiKey = apiKey,
-                            generationConfig = generationConfig {
-                                temperature = 0.2f
-                                topP = 0.95f
-                            },
+                            generationConfig = buildGenerationConfig(modelName, 0.2f),
                             requestOptions = RequestOptions(timeout = 60.seconds),
                             safetySettings = safetySettings,
                             systemInstruction = content {
@@ -602,10 +609,7 @@ class GeminiManager {
             val strictModel = GenerativeModel(
                 modelName = modelName,
                 apiKey = apiKey,
-                generationConfig = generationConfig {
-                    temperature = 0.2f
-                    topP = 0.95f
-                },
+                generationConfig = buildGenerationConfig(modelName, 0.2f),
                 requestOptions = RequestOptions(timeout = 180.seconds),
                 safetySettings = safetySettings,
                 systemInstruction = content {
@@ -909,10 +913,7 @@ class GeminiManager {
                     val generativeModel = GenerativeModel(
                         modelName = modelName,
                         apiKey = apiKey,
-                        generationConfig = generationConfig {
-                            temperature = 0.3f
-                            topP = 0.95f
-                        },
+                        generationConfig = buildGenerationConfig(modelName, 0.3f),
                         requestOptions = RequestOptions(timeout = 180.seconds),
                         safetySettings = safetySettings,
                         systemInstruction = content {
